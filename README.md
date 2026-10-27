@@ -34,6 +34,8 @@ Then open http://localhost:3000. To get traffic, send requests to the service:
 python3 app/loadgen.py
 ```
 
+Compose restarts a service that crashes, and each service has a health check, so `docker compose ps` shows `healthy` once it is ready. The collector waits for the app, and the dashboard waits for the collector. All containers run as a non-root user.
+
 Run the unit tests (no Docker needed):
 
 ```
@@ -72,6 +74,8 @@ curl 'localhost:8000/chaos'             # reset
 docker compose stop app                 # take the service down
 ```
 
+`error` must be between 0 and 1 and `slow` between 0 and 30 seconds. Anything else gets a 400 and the current settings stay in place.
+
 I ran each of these with steady traffic and watched the matching alert reach firing: `HighErrorRate` and `HighLatencyP95` after about a minute, and `ServiceDown` after the service had been stopped for 30 seconds.
 
 ## Query format
@@ -84,10 +88,12 @@ Dashboards and alerts share one small JSON query format. For example, the error 
  "den": {"fn": "rate", "metric": "agent_requests_total", "window": 60}}
 ```
 
+The dashboard's error-rate and p95 panels use the same 60 second window as their alert rules, so a tile and its alert agree. The collector rejects a range query with a step of zero or more than 2000 steps.
+
 Supported functions are `rate`, `last`, `ratio`, and `quantile`. Counter resets are handled in `rate`.
 
 ## Limits
 
-- Data is kept in memory for one hour and lost on restart.
+- Data is kept in memory for one hour and lost on restart. A series that stops reporting is dropped after an hour.
 - Alerts show on the dashboard only. Nothing sends them to email or chat yet.
 - Only one kind of target is supported: an HTTP endpoint in the Prometheus text format.
