@@ -34,6 +34,14 @@ class Store:
             while pts[0][0] < t - self.retention:
                 pts.popleft()
 
+    def names(self):
+        """Metric names with the label keys seen on each."""
+        with self.lock:
+            out = defaultdict(set)
+            for name, labels in self.series:
+                out[name].update(k for k, _ in labels)
+        return [{"name": n, "labels": sorted(k)} for n, k in sorted(out.items())]
+
     def window(self, name, t0, t1):
         with self.lock:
             items = [(k, list(p)) for k, p in self.series.items() if k[0] == name]
@@ -152,6 +160,8 @@ def make_handler(store, alerts):
             url, q = urlparse(self.path), parse_qs(urlparse(self.path).query)
             if url.path == "/health":
                 return self.send_json({"ok": True})
+            if url.path == "/api/metrics":
+                return self.send_json(store.names())
             if url.path == "/api/alerts":
                 return self.send_json(alerts.snapshot())
             if url.path == "/api/query_range":

@@ -5,97 +5,247 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Agent dashboard</title>
 <style>
-  :root { --bg:#0f1117; --card:#181b24; --line:#2a2f3d; --text:#e6e8ee; --muted:#8b93a7; }
+  :root { --bg:#0f1117; --card:#181b24; --line:#2a2f3d; --text:#e6e8ee; --muted:#8b93a7; --ok:#5fd38d; --warn:#f0b429; --crit:#e5534b; --accent:#4ea1ff; }
+  :root[data-theme="light"] { --bg:#f4f5f8; --card:#ffffff; --line:#dfe2ea; --text:#1b1f2a; --muted:#5d6577; --ok:#1a8f4e; --warn:#b7791f; --crit:#c0392b; --accent:#1f6feb; }
   * { box-sizing: border-box; }
   body { margin:0; padding:16px; background:var(--bg); color:var(--text); font:14px system-ui, sans-serif; }
-  header { display:flex; flex-wrap:wrap; gap:12px; align-items:center; justify-content:space-between; margin-bottom:16px; }
+  header { display:flex; flex-wrap:wrap; gap:12px; align-items:center; justify-content:space-between; margin-bottom:12px; }
   h1 { font-size:18px; margin:0; }
-  #alerts { display:flex; flex-wrap:wrap; gap:8px; }
+  .controls { display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
+  select, button, input { background:var(--card); color:var(--text); border:1px solid var(--line); border-radius:6px; padding:5px 9px; font:inherit; }
+  button { cursor:pointer; } button:hover { border-color:var(--accent); }
+  #alerts { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:16px; }
   .chip { padding:4px 10px; border-radius:999px; border:1px solid var(--line); font-size:12px; }
-  .chip.inactive { color:#5fd38d; border-color:#2d5f45; }
-  .chip.pending { color:#f0b429; border-color:#6b5415; }
-  .chip.firing { color:#fff; background:#c0392b; border-color:#c0392b; }
+  .chip.inactive { color:var(--ok); }
+  .chip.pending { color:var(--warn); border-color:var(--warn); }
+  .chip.firing { color:#fff; background:var(--crit); border-color:var(--crit); }
+  #stats { display:grid; grid-template-columns:repeat(auto-fit, minmax(150px, 1fr)); gap:12px; margin-bottom:16px; }
+  .stat { background:var(--card); border:1px solid var(--line); border-radius:8px; padding:12px; }
+  .stat span { color:var(--muted); font-size:12px; } .stat b { display:block; font-size:26px; margin-top:4px; }
+  .stat.warn b { color:var(--warn); } .stat.crit b { color:var(--crit); }
   #grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(320px, 1fr)); gap:16px; }
   .panel { background:var(--card); border:1px solid var(--line); border-radius:8px; padding:12px; }
-  .panel h2 { font-size:13px; margin:0 0 8px; display:flex; justify-content:space-between; color:var(--muted); font-weight:600; }
-  .panel h2 b { color:var(--text); }
+  .panel h2 { font-size:13px; margin:0 0 8px; display:flex; justify-content:space-between; align-items:center; color:var(--muted); font-weight:600; }
+  .panel h2 button { font-size:11px; padding:2px 7px; }
   canvas { width:100%; height:200px; display:block; }
   .legend { display:flex; flex-wrap:wrap; gap:10px; margin-top:6px; font-size:12px; color:var(--muted); }
+  .legend span { cursor:pointer; } .legend span.off { opacity:.35; text-decoration:line-through; }
   .legend i { display:inline-block; width:10px; height:3px; margin-right:4px; vertical-align:middle; }
+  details { margin-top:16px; } summary { cursor:pointer; color:var(--muted); margin-bottom:8px; }
+  #explore .row { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:10px; }
+  table { border-collapse:collapse; width:100%; font-size:12px; margin-top:8px; } td, th { text-align:left; padding:4px 8px; border-bottom:1px solid var(--line); }
+  .kiosk header .controls, .kiosk details { display:none; }
 </style>
 </head>
 <body>
-<header><h1 id="title">Dashboard</h1><div id="alerts"></div></header>
+<header>
+  <h1 id="title">Dashboard</h1>
+  <div class="controls">
+    <label>Range <select id="range">
+      <option value="300">5 min</option><option value="900">15 min</option><option value="3600">1 hour</option></select></label>
+    <label>Refresh <select id="refresh">
+      <option value="0">Off</option><option value="5">5 s</option><option value="15">15 s</option><option value="60">1 min</option></select></label>
+    <button id="now">Refresh now</button>
+    <button id="theme">Theme</button>
+    <button id="kiosk">Kiosk</button>
+  </div>
+</header>
+<div id="alerts"></div>
+<div id="stats"></div>
 <div id="grid"></div>
+<details id="explore">
+  <summary>Explore a metric</summary>
+  <div class="row">
+    <select id="x-metric"></select>
+    <select id="x-fn"><option>rate</option><option>last</option><option>quantile</option></select>
+    <input id="x-window" type="number" value="30" min="5" style="width:80px" title="window in seconds">
+    <input id="x-by" placeholder="group by label(s), comma separated" style="width:240px">
+    <button id="x-run">Run</button>
+  </div>
+  <div class="panel" id="x-panel" hidden><canvas></canvas><div class="legend"></div><table></table></div>
+</details>
 <script>
-const COLORS = ["#4ea1ff", "#f0b429", "#5fd38d", "#e66aa8", "#a78bfa"];
+const COLORS = ["#4ea1ff", "#f0b429", "#5fd38d", "#e66aa8", "#a78bfa", "#2dd4bf"];
 const UNITS = {
   reqps:   v => v.toFixed(2) + " req/s",
   percent: v => (v * 100).toFixed(1) + "%",
   seconds: v => v < 1 ? (v * 1000).toFixed(0) + " ms" : v.toFixed(2) + " s",
   ops:     v => v.toFixed(2) + " /s",
 };
+const esc = s => String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const label = l => Object.entries(l).map(([k, v]) => `${k}=${v}`).join(", ") || "total";
+const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const store = { get: k => { try { return localStorage.getItem(k); } catch { return null; } },
+                set: (k, v) => { try { localStorage.setItem(k, v); } catch {} } };
+const params = new URLSearchParams(location.search);
+const $ = id => document.getElementById(id);
 
-function draw(canvas, series, fmt, span) {
-  const dpr = window.devicePixelRatio || 1, w = canvas.clientWidth, h = canvas.clientHeight;
-  canvas.width = w * dpr; canvas.height = h * dpr;
-  const c = canvas.getContext("2d"); c.scale(dpr, dpr);
-  const pad = { l: 64, r: 8, t: 8, b: 20 };
-  const now = Date.now() / 1000, t0 = now - span;
-  const max = Math.max(1e-9, ...series.flatMap(s => s.points.map(p => p[1]))) * 1.15;
-  const X = t => pad.l + (t - t0) / span * (w - pad.l - pad.r);
-  const Y = v => h - pad.b - v / max * (h - pad.t - pad.b);
-  c.font = "11px system-ui"; c.fillStyle = "#8b93a7"; c.strokeStyle = "#2a2f3d"; c.lineWidth = 1;
-  for (let i = 0; i <= 4; i++) {
-    const v = max * i / 4, y = Y(v);
-    c.beginPath(); c.moveTo(pad.l, y); c.lineTo(w - pad.r, y); c.stroke();
-    c.textAlign = "right"; c.fillText(fmt(v), pad.l - 6, y + 4);
-  }
-  c.textAlign = "center";
-  for (let i = 0; i <= 5; i++) {
-    const t = t0 + span * i / 5;
-    c.fillText(new Date(t * 1000).toLocaleTimeString([], { minute: "2-digit", second: "2-digit" }), X(t), h - 5);
-  }
-  series.forEach((s, i) => {
-    c.strokeStyle = COLORS[i % COLORS.length]; c.lineWidth = 2; c.beginPath();
-    s.points.forEach(([t, v], j) => j ? c.lineTo(X(t), Y(v)) : c.moveTo(X(t), Y(v)));
-    c.stroke();
-  });
+const state = { range: +(params.get("range") || 300), refresh: +(params.get("refresh") ?? 5) };
+
+async function query(spec) {
+  const step = Math.max(5, Math.round(state.range / 60));
+  const url = `/api/query_range?span=${state.range}&step=${step}&spec=${encodeURIComponent(JSON.stringify(spec))}`;
+  return (await fetch(url)).json();
 }
 
-async function main() {
-  const dash = await (await fetch("/dashboard.json")).json();
-  document.getElementById("title").textContent = dash.title;
-  document.title = dash.title;
-  const grid = document.getElementById("grid");
-  const panels = dash.panels.map(p => {
-    const el = document.createElement("div"); el.className = "panel";
-    el.innerHTML = `<h2><span>${p.title}</span><b></b></h2><canvas></canvas><div class="legend"></div>`;
-    grid.appendChild(el);
-    return { p, el, canvas: el.querySelector("canvas"), now: el.querySelector("b"), legend: el.querySelector(".legend") };
-  });
-
-  async function refresh() {
-    for (const { p, canvas, now, legend } of panels) {
-      try {
-        const url = `/api/query_range?span=${dash.span}&step=${dash.step}&spec=${encodeURIComponent(JSON.stringify(p.query))}`;
-        const series = await (await fetch(url)).json();
-        const fmt = UNITS[p.unit] || (v => v.toFixed(2));
-        draw(canvas, series, fmt, dash.span);
-        const last = series.length ? series.reduce((a, s) => a + s.points[s.points.length - 1][1], 0) : null;
-        now.textContent = last === null ? "no data" : fmt(last);
-        legend.innerHTML = series.length > 1 || Object.keys(series[0]?.labels || {}).length
-          ? series.map((s, i) => `<span><i style="background:${COLORS[i % COLORS.length]}"></i>${label(s.labels)}</span>`).join("") : "";
-      } catch (e) { now.textContent = "error"; }
-    }
-    try {
-      const alerts = await (await fetch("/api/alerts")).json();
-      document.getElementById("alerts").innerHTML =
-        alerts.map(a => `<span class="chip ${a.state}" title="${a.summary}">${a.alert}: ${a.state}</span>`).join("");
-    } catch (e) {}
+class Chart {
+  constructor(canvas, fmt, crit) {
+    Object.assign(this, { canvas, fmt, crit, series: [], hidden: new Set(), hover: null });
+    canvas.addEventListener("mousemove", e => { this.hover = e.offsetX; this.render(); });
+    canvas.addEventListener("mouseleave", () => { this.hover = null; this.render(); });
   }
-  refresh(); setInterval(refresh, 5000);
+  setData(series) { this.series = series; this.render(); }
+  render() {
+    const { canvas, fmt } = this, dpr = devicePixelRatio || 1, w = canvas.clientWidth, h = canvas.clientHeight;
+    canvas.width = w * dpr; canvas.height = h * dpr;
+    const c = canvas.getContext("2d"); c.scale(dpr, dpr);
+    const pad = { l: 64, r: 8, t: 8, b: 20 }, span = state.range, t1 = Date.now() / 1000, t0 = t1 - span;
+    const shown = this.series.filter((_, i) => !this.hidden.has(i));
+    const top = Math.max(1e-9, this.crit || 0, ...shown.flatMap(s => s.points.map(p => p[1]))) * 1.15;
+    const X = t => pad.l + (t - t0) / span * (w - pad.l - pad.r), Y = v => h - pad.b - v / top * (h - pad.t - pad.b);
+    c.font = "11px system-ui"; c.lineWidth = 1;
+    for (let i = 0; i <= 4; i++) {
+      const v = top * i / 4, y = Y(v);
+      c.strokeStyle = css("--line"); c.beginPath(); c.moveTo(pad.l, y); c.lineTo(w - pad.r, y); c.stroke();
+      c.fillStyle = css("--muted"); c.textAlign = "right"; c.fillText(fmt(v), pad.l - 6, y + 4);
+    }
+    c.textAlign = "center";
+    for (let i = 0; i <= 5; i++) {
+      const t = t0 + span * i / 5;
+      c.fillText(new Date(t * 1000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }), X(t), h - 5);
+    }
+    if (this.crit) {
+      c.strokeStyle = css("--crit"); c.setLineDash([5, 4]); c.beginPath();
+      c.moveTo(pad.l, Y(this.crit)); c.lineTo(w - pad.r, Y(this.crit)); c.stroke(); c.setLineDash([]);
+    }
+    this.series.forEach((s, i) => {
+      if (this.hidden.has(i)) return;
+      c.strokeStyle = COLORS[i % COLORS.length]; c.lineWidth = 2; c.beginPath();
+      s.points.forEach(([t, v], j) => j ? c.lineTo(X(t), Y(v)) : c.moveTo(X(t), Y(v)));
+      c.stroke();
+    });
+    if (this.hover !== null && this.hover > pad.l) this.tooltip(c, X, Y, t0, span, pad, w, h);
+  }
+  tooltip(c, X, Y, t0, span, pad, w, h) {
+    const t = t0 + (this.hover - pad.l) / (w - pad.l - pad.r) * span;
+    const rows = [];
+    this.series.forEach((s, i) => {
+      if (this.hidden.has(i) || !s.points.length) return;
+      const p = s.points.reduce((a, b) => Math.abs(b[0] - t) < Math.abs(a[0] - t) ? b : a);
+      rows.push({ text: `${label(s.labels)}: ${this.fmt(p[1])}`, color: COLORS[i % COLORS.length], x: X(p[0]), y: Y(p[1]) });
+    });
+    if (!rows.length) return;
+    c.strokeStyle = css("--muted"); c.lineWidth = 1; c.beginPath(); c.moveTo(this.hover, pad.t); c.lineTo(this.hover, h - pad.b); c.stroke();
+    rows.forEach(r => { c.fillStyle = r.color; c.beginPath(); c.arc(r.x, r.y, 3.5, 0, 7); c.fill(); });
+    const lines = [new Date(t * 1000).toLocaleTimeString(), ...rows.map(r => r.text)];
+    const bw = Math.max(...lines.map(l => c.measureText(l).width)) + 16, bh = lines.length * 15 + 8;
+    const bx = this.hover + 12 + bw > w ? this.hover - bw - 12 : this.hover + 12;
+    c.fillStyle = css("--card"); c.strokeStyle = css("--line"); c.fillRect(bx, pad.t, bw, bh); c.strokeRect(bx, pad.t, bw, bh);
+    c.fillStyle = css("--text"); c.textAlign = "left";
+    lines.forEach((l, i) => c.fillText(l, bx + 8, pad.t + 16 + i * 15));
+  }
+}
+
+function csv(series) {
+  const rows = ["time,series,value"];
+  series.forEach(s => s.points.forEach(([t, v]) => rows.push(`${new Date(t * 1000).toISOString()},"${label(s.labels).replace(/"/g, '""')}",${v}`)));
+  return rows.join("\n");
+}
+function download(name, text) {
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([text], { type: "text/csv" }));
+  a.download = name; a.click(); URL.revokeObjectURL(a.href);
+}
+
+function legendFor(el, chart, series) {
+  const many = series.length > 1 || Object.keys(series[0]?.labels || {}).length;
+  el.innerHTML = many ? series.map((s, i) =>
+    `<span data-i="${i}" class="${chart.hidden.has(i) ? "off" : ""}"><i style="background:${COLORS[i % COLORS.length]}"></i>${esc(label(s.labels))}</span>`).join("") : "";
+  el.onclick = e => {
+    const i = e.target.closest("span")?.dataset.i;
+    if (i === undefined) return;
+    chart.hidden.has(+i) ? chart.hidden.delete(+i) : chart.hidden.add(+i);
+    legendFor(el, chart, series); chart.render();
+  };
+}
+
+const lastSum = series => series.length ? series.reduce((a, s) => a + s.points[s.points.length - 1][1], 0) : null;
+
+async function build(dash) {
+  $("title").textContent = dash.title; document.title = dash.title;
+  const panels = dash.panels.map(p => {
+    const fmt = UNITS[p.unit] || (v => v.toFixed(2));
+    if (p.type === "stat") {
+      const el = document.createElement("div"); el.className = "stat";
+      el.innerHTML = `<span>${esc(p.title)}</span><b>…</b>`; $("stats").appendChild(el);
+      return { p, async refresh() {
+        const series = await query(p.query), v = lastSum(series);
+        el.querySelector("b").textContent = v === null ? "no data" : fmt(v);
+        el.className = "stat " + (v === null ? "" : p.crit !== undefined && v >= p.crit ? "crit" : p.warn !== undefined && v >= p.warn ? "warn" : "");
+      } };
+    }
+    const el = document.createElement("div"); el.className = "panel";
+    el.innerHTML = `<h2><span>${esc(p.title)}</span><span><b></b> <button>CSV</button></span></h2><canvas></canvas><div class="legend"></div>`;
+    $("grid").appendChild(el);
+    const chart = new Chart(el.querySelector("canvas"), fmt, p.crit), now = el.querySelector("b"), legend = el.querySelector(".legend");
+    el.querySelector("button").onclick = () => download(`${p.title}.csv`, csv(chart.series));
+    return { p, async refresh() {
+      const series = await query(p.query);
+      chart.setData(series); legendFor(legend, chart, series);
+      const v = lastSum(series); now.textContent = v === null ? "no data" : fmt(v);
+    } };
+  });
+  return panels;
+}
+
+async function refreshAlerts() {
+  const alerts = await (await fetch("/api/alerts")).json(), now = Date.now() / 1000;
+  $("alerts").innerHTML = alerts.map(a => {
+    const dur = a.since ? ` for ${Math.round(now - a.since)}s` : "";
+    return `<span class="chip ${a.state}" title="${esc(a.summary)}">${esc(a.alert)}: ${a.state}${a.state === "inactive" ? "" : dur}</span>`;
+  }).join("");
+}
+
+let panels = [], timer = null;
+async function refreshAll() {
+  await Promise.all(panels.map(p => p.refresh().catch(() => {})));
+  refreshAlerts().catch(() => {});
+}
+function schedule() {
+  clearInterval(timer);
+  if (state.refresh) timer = setInterval(refreshAll, state.refresh * 1000);
+}
+
+async function setupExplore() {
+  const metrics = await (await fetch("/api/metrics")).json();
+  $("x-metric").innerHTML = metrics.map(m => `<option>${esc(m.name)}</option>`).join("");
+  const xchart = new Chart($("x-panel").querySelector("canvas"), v => v.toPrecision(3), 0);
+  $("x-run").onclick = async () => {
+    const fn = $("x-fn").value, metric = $("x-metric").value, w = +$("x-window").value || 30;
+    const by = $("x-by").value.split(",").map(s => s.trim()).filter(Boolean);
+    const spec = fn === "quantile" ? { fn, q: 0.95, metric, window: w } : { fn, metric, window: w, by };
+    const series = await query(spec);
+    $("x-panel").hidden = false; xchart.hidden.clear(); xchart.setData(series);
+    legendFor($("x-panel").querySelector(".legend"), xchart, series);
+    $("x-panel").querySelector("table").innerHTML = "<tr><th>series</th><th>latest</th></tr>" +
+      series.map(s => `<tr><td>${esc(label(s.labels))}</td><td>${s.points.length ? s.points[s.points.length - 1][1].toPrecision(4) : ""}</td></tr>`).join("");
+  };
+}
+
+function applyTheme(t) { document.documentElement.dataset.theme = t; store.set("theme", t); window.dispatchEvent(new Event("resize")); }
+
+async function main() {
+  applyTheme(store.get("theme") || (matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark"));
+  if (params.has("kiosk")) document.body.classList.add("kiosk");
+  $("range").value = state.range; $("refresh").value = state.refresh;
+  $("range").onchange = e => { state.range = +e.target.value; params.set("range", state.range); history.replaceState(null, "", "?" + params); refreshAll(); };
+  $("refresh").onchange = e => { state.refresh = +e.target.value; params.set("refresh", state.refresh); history.replaceState(null, "", "?" + params); schedule(); };
+  $("now").onclick = refreshAll;
+  $("theme").onclick = () => { applyTheme(document.documentElement.dataset.theme === "dark" ? "light" : "dark"); refreshAll(); };
+  $("kiosk").onclick = () => { params.set("kiosk", "1"); location.search = params; };
+  panels = await build(await (await fetch("/dashboard.json")).json());
+  setupExplore().catch(() => {});
+  await refreshAll(); schedule();
 }
 main();
 </script>

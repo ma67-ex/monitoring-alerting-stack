@@ -4,7 +4,7 @@ One section per alert. Each one says what the alert means, how to check it, and 
 
 ## ServiceDown
 
-**Meaning:** Prometheus could not scrape the app for 30 seconds.
+**Meaning:** The collector could not scrape the app for 30 seconds.
 
 **Check:**
 1. Run `docker compose ps`. Is the `app` container running?

@@ -42,6 +42,13 @@ class T(unittest.TestCase):
         v = evaluate(s, {"fn": "quantile", "q": 0.95, "metric": "h_bucket"}, 60)[()]
         self.assertAlmostEqual(v, 0.75)  # halfway through the 0.5..1 bucket
 
+    def test_names(self):
+        s = Store()
+        s.add("a", {"x": "1", "y": "2"}, 0, 1)
+        s.add("a", {"x": "3"}, 0, 1)
+        s.add("b", {}, 0, 1)
+        self.assertEqual(s.names(), [{"name": "a", "labels": ["x", "y"]}, {"name": "b", "labels": []}])
+
     def test_group_by(self):
         s = Store()
         counter(s, "t", {"tool": "a"}, 0, 1)

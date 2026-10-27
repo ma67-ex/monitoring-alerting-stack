@@ -10,7 +10,7 @@ The demo service stands in for an LLM agent. It answers requests by calling one 
 |---|---|---|
 | `app` | 8000 | Demo agent. Exposes `/metrics` in the Prometheus text format. Its own tiny metrics library is in `app/metrics.py`. |
 | `collector` | 9090 | Scrapes targets every 5 seconds, keeps the series in memory, answers range queries, and evaluates alert rules. |
-| `dashboard` | 3000 | Web page with four charts and live alert status. Panels are defined in `dashboard/dashboard.json`. |
+| `dashboard` | 3000 | Web page with stat tiles, charts, live alert status and a metric explorer. Panels are defined in `dashboard/dashboard.json`. |
 
 Metrics are request count by status, request latency histogram, tool calls by outcome, and token use.
 
@@ -33,6 +33,16 @@ Run the unit tests (no Docker needed):
 ```
 python3 -m unittest discover -s tests
 ```
+
+## Dashboard features
+
+- Time range (5 min, 15 min, 1 hour) and refresh interval (off, 5 s, 15 s, 1 min), kept in the URL.
+- Stat tiles that turn amber or red at configurable thresholds.
+- Hover tooltip, click-to-hide legend, threshold lines, and CSV export on each chart.
+- Light and dark theme, and kiosk mode with `?kiosk`.
+- An "Explore a metric" section: pick any collected metric, choose `rate`, `last` or `quantile`, set a window and grouping, and see a chart and table.
+
+The feature list came from studying Prometheus and Grafana. See `docs/reverse-engineering-notes.md`.
 
 ## Alerts
 
