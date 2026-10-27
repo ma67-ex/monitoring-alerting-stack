@@ -1,12 +1,31 @@
+x-health: &health
+  interval: 10s
+  timeout: 3s
+  retries: 3
+
 services:
   app:
     build: ./app
+    restart: unless-stopped
     ports: ["127.0.0.1:8000:8000"]
+    healthcheck:
+      <<: *health
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/metrics')"]
   collector:
     build: ./collector
+    restart: unless-stopped
     ports: ["127.0.0.1:9090:9090"]
-    depends_on: [app]
+    depends_on:
+      app: {condition: service_healthy}
+    healthcheck:
+      <<: *health
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:9090/health')"]
   dashboard:
     build: ./dashboard
+    restart: unless-stopped
     ports: ["127.0.0.1:3000:3000"]
-    depends_on: [collector]
+    depends_on:
+      collector: {condition: service_healthy}
+    healthcheck:
+      <<: *health
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:3000/')"]
