@@ -102,6 +102,7 @@
   .rules .sum { color: var(--muted); } .rules .st { color: var(--muted); width: 120px; text-align: right; }
   .rules div[data-s="firing"] .st { color: var(--crit); } .rules div[data-s="pending"] .st { color: var(--warn); }
 
+  .explore { margin-bottom: 8px; } .explore h2 { margin-top: 24px; }
   .form { display: flex; flex-wrap: wrap; gap: 14px 20px; align-items: flex-end; padding-bottom: 14px; }
   .form label { display: grid; gap: 4px; font-size: 12px; color: var(--muted); }
   .form select, .form input { background: var(--tint); border: 1px solid var(--line); border-radius: 2px; padding: 6px 8px; min-width: 120px; }
@@ -144,12 +145,6 @@
 </div>
 
 <main class="wrap">
-  <div id="rows"></div>
-  <div class="axis"><canvas id="axis"></canvas></div>
-
-  <h2>Alert rules</h2>
-  <div class="rules" id="rules"></div>
-
   <div class="explore">
     <h2>Ad hoc query</h2>
     <div class="form">
@@ -161,6 +156,13 @@
     </div>
     <div id="x-rows"></div>
   </div>
+
+  <div id="rows"></div>
+  <div class="axis"><canvas id="axis"></canvas></div>
+
+  <h2>Alert rules</h2>
+  <div class="rules" id="rules"></div>
+
 
   <p class="hint"><kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd> range &nbsp; <kbd>r</kbd> refresh &nbsp; <kbd>t</kbd> theme &nbsp; <kbd>k</kbd> kiosk &nbsp; hover any chart to read all rows at that time</p>
 </main>
