@@ -65,7 +65,7 @@
   .band[data-s="pending"] .state::before, .band[data-s="firing"] .state::before { background: var(--on-state); }
 
   /* strip rows: flat, ruled, no containers */
-  .row { display: grid; grid-template-columns: 280px 1fr; border-bottom: 1px solid var(--line); }
+  .row { display: grid; grid-template-columns: 280px 1fr; border-bottom: 1px solid var(--line); padding-inline: 16px; margin-inline: -16px; }
   .row[data-a="firing"] { background: color-mix(in oklch, var(--crit) 10%, var(--bg)); }
   .row[data-a="pending"] { background: color-mix(in oklch, var(--warn) 9%, var(--bg)); }
   .meta { padding: 16px 20px 14px 0; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
@@ -88,7 +88,7 @@
   .csv:hover { color: var(--text); text-decoration: underline; text-underline-offset: 3px; }
   .plot { min-width: 0; position: relative; min-height: 176px; }
   .plot canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
-  .axis { display: grid; grid-template-columns: 280px 1fr; }
+  .axis { display: grid; grid-template-columns: 280px 1fr; padding-inline: 16px; margin-inline: -16px; }
   .axis canvas { width: 100%; height: 30px; display: block; grid-column: 2; }
   .skel { color: transparent !important; background: var(--grid); animation: pulse 1.4s ease-in-out infinite; width: 6ch; }
   @keyframes pulse { 50% { opacity: .5; } }
