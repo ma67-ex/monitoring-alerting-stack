@@ -1,21 +1,12 @@
 services:
   app:
     build: ./app
-    ports: ["8000:8000"]
-  prometheus:
-    image: prom/prometheus:v2.55.1
-    ports: ["9090:9090"]
-    volumes:
-      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
-      - ./prometheus/alerts.yml:/etc/prometheus/alerts.yml:ro
+    ports: ["127.0.0.1:8000:8000"]
+  collector:
+    build: ./collector
+    ports: ["127.0.0.1:9090:9090"]
     depends_on: [app]
-  grafana:
-    image: grafana/grafana:11.3.0
-    ports: ["3000:3000"]
-    environment:
-      GF_AUTH_ANONYMOUS_ENABLED: "true"
-      GF_AUTH_ANONYMOUS_ORG_ROLE: Admin
-    volumes:
-      - ./grafana/provisioning:/etc/grafana/provisioning:ro
-      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
-    depends_on: [prometheus]
+  dashboard:
+    build: ./dashboard
+    ports: ["127.0.0.1:3000:3000"]
+    depends_on: [collector]

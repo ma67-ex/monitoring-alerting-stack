@@ -1,0 +1,17 @@
+{
+  "title": "Agent service",
+  "span": 300,
+  "step": 5,
+  "panels": [
+    {"title": "Request rate", "unit": "reqps",
+     "query": {"fn": "rate", "metric": "agent_requests_total", "window": 30}},
+    {"title": "Error rate", "unit": "percent",
+     "query": {"fn": "ratio",
+               "num": {"fn": "rate", "metric": "agent_requests_total", "match": {"status": "500"}, "window": 30},
+               "den": {"fn": "rate", "metric": "agent_requests_total", "window": 30}}},
+    {"title": "p95 latency", "unit": "seconds",
+     "query": {"fn": "quantile", "q": 0.95, "metric": "agent_request_seconds_bucket", "window": 30}},
+    {"title": "Tool failures by tool", "unit": "ops",
+     "query": {"fn": "rate", "metric": "agent_tool_calls_total", "match": {"outcome": "error"}, "by": ["tool"], "window": 30}}
+  ]
+}

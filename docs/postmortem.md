@@ -32,10 +32,10 @@ An injected fault. In a real incident this section would name the actual bug, ch
 
 ## What to improve
 
-- Alerts do not notify anyone yet. Add Alertmanager and a chat or email receiver.
-- Latency alert was not exercised in this run. Test it with `curl 'localhost:8000/chaos?slow=2'`.
+- Alerts do not notify anyone yet. Add a chat or email receiver to the collector.
+
 
 ## Action items
 
-1. Add Alertmanager with one receiver.
+1. Add one notification receiver to the collector.
 2. Run the slow-response test and record the time to alert.

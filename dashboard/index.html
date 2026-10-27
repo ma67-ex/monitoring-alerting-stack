@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Agent dashboard</title>
+<style>
+  :root { --bg:#0f1117; --card:#181b24; --line:#2a2f3d; --text:#e6e8ee; --muted:#8b93a7; }
+  * { box-sizing: border-box; }
+  body { margin:0; padding:16px; background:var(--bg); color:var(--text); font:14px system-ui, sans-serif; }
+  header { display:flex; flex-wrap:wrap; gap:12px; align-items:center; justify-content:space-between; margin-bottom:16px; }
+  h1 { font-size:18px; margin:0; }
+  #alerts { display:flex; flex-wrap:wrap; gap:8px; }
+  .chip { padding:4px 10px; border-radius:999px; border:1px solid var(--line); font-size:12px; }
+  .chip.inactive { color:#5fd38d; border-color:#2d5f45; }
+  .chip.pending { color:#f0b429; border-color:#6b5415; }
+  .chip.firing { color:#fff; background:#c0392b; border-color:#c0392b; }
+  #grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(320px, 1fr)); gap:16px; }
+  .panel { background:var(--card); border:1px solid var(--line); border-radius:8px; padding:12px; }
+  .panel h2 { font-size:13px; margin:0 0 8px; display:flex; justify-content:space-between; color:var(--muted); font-weight:600; }
+  .panel h2 b { color:var(--text); }
+  canvas { width:100%; height:200px; display:block; }
+  .legend { display:flex; flex-wrap:wrap; gap:10px; margin-top:6px; font-size:12px; color:var(--muted); }
+  .legend i { display:inline-block; width:10px; height:3px; margin-right:4px; vertical-align:middle; }
+</style>
+</head>
+<body>
+<header><h1 id="title">Dashboard</h1><div id="alerts"></div></header>
+<div id="grid"></div>
+<script>
+const COLORS = ["#4ea1ff", "#f0b429", "#5fd38d", "#e66aa8", "#a78bfa"];
+const UNITS = {
+  reqps:   v => v.toFixed(2) + " req/s",
+  percent: v => (v * 100).toFixed(1) + "%",
+  seconds: v => v < 1 ? (v * 1000).toFixed(0) + " ms" : v.toFixed(2) + " s",
+  ops:     v => v.toFixed(2) + " /s",
+};
+const label = l => Object.entries(l).map(([k, v]) => `${k}=${v}`).join(", ") || "total";
+
+function draw(canvas, series, fmt, span) {
+  const dpr = window.devicePixelRatio || 1, w = canvas.clientWidth, h = canvas.clientHeight;
+  canvas.width = w * dpr; canvas.height = h * dpr;
+  const c = canvas.getContext("2d"); c.scale(dpr, dpr);
+  const pad = { l: 64, r: 8, t: 8, b: 20 };
+  const now = Date.now() / 1000, t0 = now - span;
+  const max = Math.max(1e-9, ...series.flatMap(s => s.points.map(p => p[1]))) * 1.15;
+  const X = t => pad.l + (t - t0) / span * (w - pad.l - pad.r);
+  const Y = v => h - pad.b - v / max * (h - pad.t - pad.b);
+  c.font = "11px system-ui"; c.fillStyle = "#8b93a7"; c.strokeStyle = "#2a2f3d"; c.lineWidth = 1;
+  for (let i = 0; i <= 4; i++) {
+    const v = max * i / 4, y = Y(v);
+    c.beginPath(); c.moveTo(pad.l, y); c.lineTo(w - pad.r, y); c.stroke();
+    c.textAlign = "right"; c.fillText(fmt(v), pad.l - 6, y + 4);
+  }
+  c.textAlign = "center";
+  for (let i = 0; i <= 5; i++) {
+    const t = t0 + span * i / 5;
+    c.fillText(new Date(t * 1000).toLocaleTimeString([], { minute: "2-digit", second: "2-digit" }), X(t), h - 5);
+  }
+  series.forEach((s, i) => {
+    c.strokeStyle = COLORS[i % COLORS.length]; c.lineWidth = 2; c.beginPath();
+    s.points.forEach(([t, v], j) => j ? c.lineTo(X(t), Y(v)) : c.moveTo(X(t), Y(v)));
+    c.stroke();
+  });
+}
+
+async function main() {
+  const dash = await (await fetch("/dashboard.json")).json();
+  document.getElementById("title").textContent = dash.title;
+  document.title = dash.title;
+  const grid = document.getElementById("grid");
+  const panels = dash.panels.map(p => {
+    const el = document.createElement("div"); el.className = "panel";
+    el.innerHTML = `<h2><span>${p.title}</span><b></b></h2><canvas></canvas><div class="legend"></div>`;
+    grid.appendChild(el);
+    return { p, el, canvas: el.querySelector("canvas"), now: el.querySelector("b"), legend: el.querySelector(".legend") };
+  });
+
+  async function refresh() {
+    for (const { p, canvas, now, legend } of panels) {
+      try {
+        const url = `/api/query_range?span=${dash.span}&step=${dash.step}&spec=${encodeURIComponent(JSON.stringify(p.query))}`;
+        const series = await (await fetch(url)).json();
+        const fmt = UNITS[p.unit] || (v => v.toFixed(2));
+        draw(canvas, series, fmt, dash.span);
+        const last = series.length ? series.reduce((a, s) => a + s.points[s.points.length - 1][1], 0) : null;
+        now.textContent = last === null ? "no data" : fmt(last);
+        legend.innerHTML = series.length > 1 || Object.keys(series[0]?.labels || {}).length
+          ? series.map((s, i) => `<span><i style="background:${COLORS[i % COLORS.length]}"></i>${label(s.labels)}</span>`).join("") : "";
+      } catch (e) { now.textContent = "error"; }
+    }
+    try {
+      const alerts = await (await fetch("/api/alerts")).json();
+      document.getElementById("alerts").innerHTML =
+        alerts.map(a => `<span class="chip ${a.state}" title="${a.summary}">${a.alert}: ${a.state}</span>`).join("");
+    } catch (e) {}
+  }
+  refresh(); setInterval(refresh, 5000);
+}
+main();
+</script>
+</body>
+</html>

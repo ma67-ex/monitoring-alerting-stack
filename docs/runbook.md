@@ -17,7 +17,7 @@ One section per alert. Each one says what the alert means, how to check it, and 
 **Meaning:** More than 5% of requests returned status 500 over the last minute. In this service that means a tool call failed.
 
 **Check:**
-1. Open the dashboard and look at "Tool failures by tool". One tool failing points to a problem with that tool. All tools failing points to something shared.
+1. Open the dashboard at http://localhost:3000 and look at "Tool failures by tool". One tool failing points to a problem with that tool. All tools failing points to something shared.
 2. Run `docker compose logs app --tail 50`.
 
 **Fix:** Fix or disable the failing tool. In the demo, reset the injected fault with `curl 'localhost:8000/chaos'`.

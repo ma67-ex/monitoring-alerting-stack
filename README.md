@@ -1,16 +1,18 @@
 # monitoring-alerting-stack
 
-A small service with the monitoring around it: metrics, a dashboard, alerts, a runbook, and a postmortem. Start it with one command and watch it react when you break it.
+A small monitoring system written from scratch in Python, with no third-party packages. It has three parts: a demo service that exposes metrics, a collector that scrapes and stores them and fires alerts, and a web dashboard.
 
-The service is a stand-in for an LLM agent. It answers requests by calling one to three fake tools, and it can be told to fail or slow down on demand. That makes it easy to practice spotting and handling incidents.
+The demo service stands in for an LLM agent. It answers requests by calling one to three fake tools, and it can be told to fail or slow down on demand. That makes it easy to practice spotting and handling incidents.
 
-## What you get
+## The three services
 
-- A Python service that exposes Prometheus metrics: request count by status, latency histogram, tool calls by outcome, and token use.
-- Prometheus, scraping the service every 5 seconds.
-- Three alert rules: `ServiceDown`, `HighErrorRate` (over 5% for 1 minute), and `HighLatencyP95` (over 1 second for 1 minute).
-- A Grafana dashboard with four panels: request rate, error rate, p95 latency, and tool failures by tool.
-- A runbook with one section per alert, and a postmortem for a staged incident.
+| Service | Port | What it does |
+|---|---|---|
+| `app` | 8000 | Demo agent. Exposes `/metrics` in the Prometheus text format. Its own tiny metrics library is in `app/metrics.py`. |
+| `collector` | 9090 | Scrapes targets every 5 seconds, keeps the series in memory, answers range queries, and evaluates alert rules. |
+| `dashboard` | 3000 | Web page with four charts and live alert status. Panels are defined in `dashboard/dashboard.json`. |
+
+Metrics are request count by status, request latency histogram, tool calls by outcome, and token use.
 
 ## Run it
 
@@ -18,13 +20,29 @@ You need Docker with Compose.
 
 ```
 docker compose up -d --build
-python3 app/loadgen.py          # steady traffic, 5 requests per second
 ```
 
-Then open:
+Then open http://localhost:3000. To get traffic, send requests to the service:
 
-- Grafana at http://localhost:3000 (no login, dashboard "Agent service")
-- Prometheus at http://localhost:9090/alerts
+```
+python3 app/loadgen.py
+```
+
+Run the unit tests (no Docker needed):
+
+```
+python3 -m unittest discover -s tests
+```
+
+## Alerts
+
+Rules live in `collector/alerts.json`. Each rule is a query, a comparison, and a hold time. An alert goes from inactive to pending when the condition first holds, then to firing once it has held for the full `for` period.
+
+| Alert | Fires when |
+|---|---|
+| `ServiceDown` | The service has not answered scrapes for 30 seconds. |
+| `HighErrorRate` | More than 5% of requests fail, for 1 minute. |
+| `HighLatencyP95` | The 95th percentile latency is above 1 second, for 1 minute. |
 
 ## Break it on purpose
 
@@ -35,19 +53,22 @@ curl 'localhost:8000/chaos'             # reset
 docker compose stop app                 # take the service down
 ```
 
-I checked each alert this way. With 50% tool errors and steady traffic, `HighErrorRate` went to firing. With the service stopped, `ServiceDown` fired after about a minute.
+I ran each of these with steady traffic and watched the matching alert reach firing: `HighErrorRate` and `HighLatencyP95` after about a minute, and `ServiceDown` after the service had been stopped for 30 seconds.
 
-## Files
+## Query format
 
-| Path | Purpose |
-|---|---|
-| `app/service.py` | The demo service and its metrics |
-| `app/loadgen.py` | Traffic generator |
-| `prometheus/alerts.yml` | Alert rules |
-| `grafana/dashboards/agent.json` | Dashboard, loaded automatically |
-| `docs/runbook.md` | What to do when each alert fires |
-| `docs/postmortem.md` | Write-up of a staged incident |
+Dashboards and alerts share one small JSON query format. For example, the error ratio:
+
+```json
+{"fn": "ratio",
+ "num": {"fn": "rate", "metric": "agent_requests_total", "match": {"status": "500"}, "window": 60},
+ "den": {"fn": "rate", "metric": "agent_requests_total", "window": 60}}
+```
+
+Supported functions are `rate`, `last`, `ratio`, and `quantile`. Counter resets are handled in `rate`.
 
 ## Limits
 
-Alerts show up in Prometheus only. Nothing sends them to email or chat, because Alertmanager is not set up. Adding it is the obvious next step.
+- Data is kept in memory for one hour and lost on restart.
+- Alerts show on the dashboard only. Nothing sends them to email or chat yet.
+- Only one kind of target is supported: an HTTP endpoint in the Prometheus text format.

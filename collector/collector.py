@@ -1,0 +1,196 @@
+"""Collector: scrapes /metrics endpoints, stores time series in memory, answers queries, evaluates alerts.
+
+A query is a small JSON spec:
+  {"fn": "rate", "metric": "x_total", "match": {"status": "500"}, "by": ["tool"], "window": 60}
+  {"fn": "last", "metric": "up", "window": 15}
+  {"fn": "ratio", "num": <spec>, "den": <spec>}
+  {"fn": "quantile", "q": 0.95, "metric": "x_seconds_bucket", "window": 60}
+"""
+import json, os, re, threading, time, urllib.request
+from collections import defaultdict, deque
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from urllib.parse import urlparse, parse_qs
+
+LINE = re.compile(r"^([a-zA-Z_:][\w:]*)(?:\{(.*)\})?\s+(\S+)")
+LABEL = re.compile(r'(\w+)="((?:[^"\\]|\\.)*)"')
+
+
+def parse(text):
+    """Yield (name, labels, value) from Prometheus text format."""
+    for line in text.splitlines():
+        m = LINE.match(line)
+        if m:
+            yield m.group(1), dict(LABEL.findall(m.group(2) or "")), float(m.group(3))
+
+
+class Store:
+    def __init__(self, retention=3600):
+        self.retention, self.series, self.lock = retention, defaultdict(deque), threading.Lock()
+
+    def add(self, name, labels, t, v):
+        with self.lock:
+            pts = self.series[(name, tuple(sorted(labels.items())))]
+            pts.append((t, v))
+            while pts[0][0] < t - self.retention:
+                pts.popleft()
+
+    def window(self, name, t0, t1):
+        with self.lock:
+            items = [(k, list(p)) for k, p in self.series.items() if k[0] == name]
+        for (_, labels), pts in items:
+            sel = [p for p in pts if t0 <= p[0] <= t1]
+            if sel:
+                yield dict(labels), sel
+
+
+def _rate(pts):
+    """Per-second increase of a counter, tolerating resets. None if under two points."""
+    if len(pts) < 2:
+        return None
+    inc, prev = 0.0, pts[0][1]
+    for _, v in pts[1:]:
+        inc += v - prev if v >= prev else v
+        prev = v
+    return inc / (pts[-1][0] - pts[0][0])
+
+
+def _series(store, spec, t):
+    for labels, pts in store.window(spec["metric"], t - spec.get("window", 60), t):
+        if all(labels.get(k) == v for k, v in spec.get("match", {}).items()):
+            yield labels, pts
+
+
+def _key(spec, labels):
+    return tuple((b, labels.get(b, "")) for b in spec.get("by", []))
+
+
+def evaluate(store, spec, t):
+    """Return {group: value}, where group is a tuple of (label, value) pairs."""
+    fn, out = spec["fn"], defaultdict(float)
+    if fn == "rate":
+        for labels, pts in _series(store, spec, t):
+            r = _rate(pts)
+            if r is not None:
+                out[_key(spec, labels)] += r
+    elif fn == "last":
+        for labels, pts in _series(store, spec, t):
+            out[_key(spec, labels)] += pts[-1][1]
+    elif fn == "ratio":
+        num, den = evaluate(store, spec["num"], t), evaluate(store, spec["den"], t)
+        # a missing numerator means zero events, not "no data"
+        return {k: num.get(k, 0.0) / d for k, d in den.items() if d > 0}
+    elif fn == "quantile":
+        by_le = defaultdict(float)
+        for labels, pts in _series(store, spec, t):
+            r = _rate(pts)
+            if r is not None:
+                by_le[float(labels["le"])] += r
+        les = sorted(by_le)
+        if not les or by_le[les[-1]] <= 0:
+            return {}
+        rank, prev_le, prev_c = spec["q"] * by_le[les[-1]], 0.0, 0.0
+        for le in les:
+            c = by_le[le]
+            if c >= rank:
+                if le == float("inf"):
+                    return {(): prev_le}  # beyond last finite bucket: report its bound
+                return {(): le if c == prev_c else prev_le + (le - prev_le) * (rank - prev_c) / (c - prev_c)}
+            prev_le, prev_c = le, c
+    else:
+        raise ValueError(f"unknown fn {fn!r}")
+    return dict(out)
+
+
+OPS = {">": lambda a, b: a > b, "<": lambda a, b: a < b}
+
+
+class Alerts:
+    """Each rule moves inactive -> pending -> firing once its condition has held for `for` seconds."""
+
+    def __init__(self, rules):
+        self.rules = rules
+        self.state = {r["alert"]: {"state": "inactive", "since": None, "value": None} for r in rules}
+
+    def evaluate(self, store, now):
+        for r in self.rules:
+            values = evaluate(store, r["expr"], now)
+            hits = [v for v in values.values() if OPS[r["op"]](v, r["threshold"])]
+            s = self.state[r["alert"]]
+            s["value"] = max(values.values()) if values else None
+            if not hits:
+                s.update(state="inactive", since=None)
+            elif s["since"] is None:
+                s.update(state="pending", since=now)
+            if hits and now - s["since"] >= r.get("for", 0):
+                s["state"] = "firing"
+
+    def snapshot(self):
+        return [{"alert": r["alert"], "summary": r.get("summary", ""), **self.state[r["alert"]]} for r in self.rules]
+
+
+def scrape(store, url, now):
+    try:
+        text = urllib.request.urlopen(url, timeout=3).read().decode()
+        samples, up = list(parse(text)), 1.0
+    except OSError:
+        samples, up = [], 0.0
+    store.add("up", {"instance": url}, now, up)
+    for name, labels, v in samples:
+        store.add(name, labels, now, v)
+
+
+def make_handler(store, alerts):
+    class H(BaseHTTPRequestHandler):
+        def send_json(self, obj, code=200):
+            body = json.dumps(obj).encode()
+            self.send_response(code)
+            self.send_header("Content-Type", "application/json")
+            self.end_headers()
+            self.wfile.write(body)
+
+        def do_GET(self):
+            url, q = urlparse(self.path), parse_qs(urlparse(self.path).query)
+            if url.path == "/health":
+                return self.send_json({"ok": True})
+            if url.path == "/api/alerts":
+                return self.send_json(alerts.snapshot())
+            if url.path == "/api/query_range":
+                try:
+                    spec, end = json.loads(q["spec"][0]), float(q.get("end", [time.time()])[0])
+                    span, step = float(q.get("span", [300])[0]), float(q.get("step", [5])[0])
+                    series, t = defaultdict(list), end - span
+                    while t <= end:
+                        for key, v in evaluate(store, spec, t).items():
+                            series[key].append([t, v])
+                        t += step
+                    return self.send_json([{"labels": dict(k), "points": p} for k, p in series.items()])
+                except (KeyError, ValueError) as e:
+                    return self.send_json({"error": str(e)}, 400)
+            self.send_json({"error": "not found"}, 404)
+
+        def log_message(self, *a):
+            pass
+
+    return H
+
+
+def main():
+    targets = os.environ.get("COLLECTOR_TARGETS", "http://app:8000/metrics").split(",")
+    interval = float(os.environ.get("COLLECTOR_INTERVAL", 5))
+    store = Store()
+    alerts = Alerts(json.load(open(os.path.join(os.path.dirname(__file__), "alerts.json"))))
+
+    def loop():
+        while True:
+            now = time.time()
+            for t in targets:
+                scrape(store, t, now)
+            alerts.evaluate(store, now)
+            time.sleep(interval)
+
+    threading.Thread(target=loop, daemon=True).start()
+    ThreadingHTTPServer(("0.0.0.0", 9090), make_handler(store, alerts)).serve_forever()
+
+
+if __name__ == "__main__":
+    main()

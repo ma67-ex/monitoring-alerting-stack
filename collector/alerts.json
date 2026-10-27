@@ -1,0 +1,22 @@
+[
+  {
+    "alert": "ServiceDown",
+    "summary": "app is not responding to scrapes",
+    "expr": {"fn": "last", "metric": "up", "window": 15},
+    "op": "<", "threshold": 1, "for": 30
+  },
+  {
+    "alert": "HighErrorRate",
+    "summary": "more than 5% of requests are failing",
+    "expr": {"fn": "ratio",
+             "num": {"fn": "rate", "metric": "agent_requests_total", "match": {"status": "500"}, "window": 60},
+             "den": {"fn": "rate", "metric": "agent_requests_total", "window": 60}},
+    "op": ">", "threshold": 0.05, "for": 60
+  },
+  {
+    "alert": "HighLatencyP95",
+    "summary": "p95 latency above 1 second",
+    "expr": {"fn": "quantile", "q": 0.95, "metric": "agent_request_seconds_bucket", "window": 60},
+    "op": ">", "threshold": 1, "for": 60
+  }
+]
