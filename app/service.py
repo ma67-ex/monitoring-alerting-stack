@@ -5,7 +5,7 @@ Endpoints:
   /metrics        Prometheus metrics
   /chaos?error=0.3&slow=1.5   inject failures: error rate (0-1) and extra latency (seconds)
 """
-import random, time
+import math, random, time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse, parse_qs
 import metrics
@@ -17,6 +17,17 @@ TOOLS = Counter("agent_tool_calls_total", "Tool calls", ["tool", "outcome"])
 TOKENS = Counter("agent_tokens_total", "Tokens used")
 
 chaos = {"error": 0.0, "slow": 0.0}
+
+
+def set_chaos(q):
+    """Apply ?error= (0-1) and ?slow= (0-30 seconds). Return an error message, or None on success."""
+    try:
+        error, slow = float(q.get("error", [0])[0]), float(q.get("slow", [0])[0])
+    except ValueError:
+        return "error and slow must be numbers"
+    if not (math.isfinite(error) and math.isfinite(slow) and 0 <= error <= 1 and 0 <= slow <= 30):
+        return "error must be 0-1 and slow must be 0-30"
+    chaos.update(error=error, slow=slow)
 
 
 def handle_ask():
@@ -42,9 +53,9 @@ class Handler(BaseHTTPRequestHandler):
         if url.path == "/metrics":
             return self.reply(200, metrics.render())
         if url.path == "/chaos":
-            q = parse_qs(url.query)
-            chaos["error"] = float(q.get("error", [0])[0])
-            chaos["slow"] = float(q.get("slow", [0])[0])
+            err = set_chaos(parse_qs(url.query))
+            if err:
+                return self.reply(400, f"{err}\n".encode())
             return self.reply(200, f"chaos set: {chaos}\n".encode())
         if url.path == "/ask":
             start = time.perf_counter()
