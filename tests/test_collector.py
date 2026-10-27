@@ -1,6 +1,9 @@
-import os, sys, unittest
+import json, os, sys, threading, unittest, urllib.error, urllib.request
+from http.server import ThreadingHTTPServer
+from unittest import mock
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "collector"))
-from collector import Store, Alerts, parse, evaluate, _rate
+import collector
+from collector import Store, Alerts, parse, evaluate, scrape, tick, make_handler, _rate
 
 
 def counter(store, name, labels, start, per_sec, n=13, dt=5):
@@ -66,6 +69,45 @@ class T(unittest.TestCase):
         s.add("up", {}, 30, 0.0); a.evaluate(s, 30); self.assertEqual(state(), "pending")
         s.add("up", {}, 41, 0.0); a.evaluate(s, 41); self.assertEqual(state(), "firing")
         s.add("up", {}, 50, 1.0); a.evaluate(s, 50); self.assertEqual(state(), "inactive")
+
+    def test_rate_same_timestamp_is_none(self):
+        self.assertIsNone(_rate([(5, 1), (5, 2)]))
+
+    def test_scrape_garbage_body_marks_target_down(self):
+        s = Store()
+        resp = mock.Mock(); resp.read.return_value = b"x_total notanumber\n"
+        with mock.patch.object(collector.urllib.request, "urlopen", return_value=resp):
+            scrape(s, "http://t", 1.0)
+        self.assertEqual(evaluate(s, {"fn": "last", "metric": "up"}, 1.0), {(): 0.0})
+
+    def test_tick_survives_bad_alert_rule(self):
+        s = Store()
+        s.add("h_bucket", {"le": "oops"}, 0, 1); s.add("h_bucket", {"le": "oops"}, 5, 2)
+        a = Alerts([{"alert": "Bad", "expr": {"fn": "quantile", "q": 0.9, "metric": "h_bucket"},
+                     "op": ">", "threshold": 1}])
+        with mock.patch.object(collector.urllib.request, "urlopen", side_effect=OSError):
+            tick(s, a, ["http://t"], 6.0)  # must not raise
+
+    def _get(self, path):
+        srv = ThreadingHTTPServer(("127.0.0.1", 0), make_handler(Store(), Alerts([])))
+        threading.Thread(target=srv.serve_forever, daemon=True).start()
+        try:
+            return urllib.request.urlopen(f"http://127.0.0.1:{srv.server_port}{path}", timeout=3)
+        except urllib.error.HTTPError as e:
+            return e
+        finally:
+            srv.shutdown()
+
+    def test_query_range_rejects_zero_step(self):
+        spec = urllib.request.quote(json.dumps({"fn": "last", "metric": "up"}))
+        self.assertEqual(self._get(f"/api/query_range?spec={spec}&step=0").code, 400)
+
+    def test_query_range_rejects_too_many_steps(self):
+        spec = urllib.request.quote(json.dumps({"fn": "last", "metric": "up"}))
+        self.assertEqual(self._get(f"/api/query_range?spec={spec}&span=1e9&step=1").code, 400)
+
+    def test_query_range_rejects_non_object_spec(self):
+        self.assertEqual(self._get("/api/query_range?spec=%5B1%5D").code, 400)
 
 
 if __name__ == "__main__":

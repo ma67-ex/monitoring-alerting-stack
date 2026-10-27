@@ -59,7 +59,8 @@ def _rate(pts):
     for _, v in pts[1:]:
         inc += v - prev if v >= prev else v
         prev = v
-    return inc / (pts[-1][0] - pts[0][0])
+    dt = pts[-1][0] - pts[0][0]
+    return inc / dt if dt > 0 else None
 
 
 def _series(store, spec, t):
@@ -109,6 +110,7 @@ def evaluate(store, spec, t):
     return dict(out)
 
 
+MAX_STEPS = 2000
 OPS = {">": lambda a, b: a > b, "<": lambda a, b: a < b}
 
 
@@ -141,11 +143,24 @@ def scrape(store, url, now):
     try:
         text = urllib.request.urlopen(url, timeout=3).read().decode()
         samples, up = list(parse(text)), 1.0
-    except OSError:
+    except (OSError, ValueError):  # unreachable, or a body that is not valid metrics text
         samples, up = [], 0.0
     store.add("up", {"instance": url}, now, up)
     for name, labels, v in samples:
         store.add(name, labels, now, v)
+
+
+def tick(store, alerts, targets, now):
+    """One scrape-and-evaluate cycle. A bad target or rule must never kill the loop."""
+    for t in targets:
+        try:
+            scrape(store, t, now)
+        except Exception as e:
+            print(f"scrape {t} failed: {e!r}", flush=True)
+    try:
+        alerts.evaluate(store, now)
+    except Exception as e:
+        print(f"alert evaluation failed: {e!r}", flush=True)
 
 
 def make_handler(store, alerts):
@@ -169,13 +184,15 @@ def make_handler(store, alerts):
                 try:
                     spec, end = json.loads(q["spec"][0]), float(q.get("end", [time.time()])[0])
                     span, step = float(q.get("span", [300])[0]), float(q.get("step", [5])[0])
+                    if not (step > 0 and 0 <= span / step <= MAX_STEPS):
+                        raise ValueError(f"need step > 0 and at most {MAX_STEPS} steps")
                     series, t = defaultdict(list), end - span
                     while t <= end:
                         for key, v in evaluate(store, spec, t).items():
                             series[key].append([t, v])
                         t += step
                     return self.send_json([{"labels": dict(k), "points": p} for k, p in series.items()])
-                except (KeyError, ValueError) as e:
+                except (KeyError, ValueError, TypeError, AttributeError) as e:
                     return self.send_json({"error": str(e)}, 400)
             self.send_json({"error": "not found"}, 404)
 
@@ -193,10 +210,7 @@ def main():
 
     def loop():
         while True:
-            now = time.time()
-            for t in targets:
-                scrape(store, t, now)
-            alerts.evaluate(store, now)
+            tick(store, alerts, targets, time.time())
             time.sleep(interval)
 
     threading.Thread(target=loop, daemon=True).start()
