@@ -168,7 +168,8 @@
 </main>
 <script>
 const $ = id => document.getElementById(id);
-const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const cssCache = {};
+const css = n => cssCache[n] ??= getComputedStyle(document.documentElement).getPropertyValue(n).trim();
 const color = i => css(`--s${(i % 6) + 1}`);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const label = l => Object.entries(l).map(([k, v]) => `${k}=${v}`).join(", ") || "total";
@@ -202,16 +203,19 @@ const tickCount = w => Math.max(2, Math.min(8, Math.floor(w / 130)));
 function prep(canvas) {
   const dpr = devicePixelRatio || 1, w = canvas.clientWidth, h = canvas.clientHeight;
   if (!w || !h) return null;
-  canvas.width = w * dpr; canvas.height = h * dpr;
-  const c = canvas.getContext("2d"); c.scale(dpr, dpr);
+  const W = Math.round(w * dpr), H = Math.round(h * dpr);
+  if (canvas.width !== W || canvas.height !== H) { canvas.width = W; canvas.height = H; }
+  const c = canvas.getContext("2d"); c.setTransform(dpr, 0, 0, dpr, 0, 0); c.clearRect(0, 0, w, h);
   return { c, w, h };
 }
 const xOf = (t, w) => PAD.l + (t - win.t0) / (win.t1 - win.t0) * (w - PAD.l - PAD.r);
 const tOf = (x, w) => win.t0 + (x - PAD.l) / (w - PAD.l - PAD.r) * (win.t1 - win.t0);
 
+let frame = 0;
+const scheduleRender = () => { frame ||= requestAnimationFrame(() => { frame = 0; renderAll(); }); };
 function bindHover(canvas) {
-  canvas.addEventListener("mousemove", e => { hover.t = tOf(e.offsetX, canvas.clientWidth); renderAll(); });
-  canvas.addEventListener("mouseleave", () => { hover.t = null; renderAll(); });
+  canvas.addEventListener("mousemove", e => { hover.t = tOf(e.offsetX, canvas.clientWidth); scheduleRender(); });
+  canvas.addEventListener("mouseleave", () => { hover.t = null; scheduleRender(); });
 }
 
 /* ---- one metric: label column + plot ---- */
@@ -366,11 +370,11 @@ async function refreshAll() {
   renderAxis();
   $("live").textContent = res.some(r => r.status === "rejected") ? "collector unreachable" : (state.refresh ? "live " : "paused ") + clock(win.t1, true);
 }
-function schedule() { clearInterval(timer); if (state.refresh) timer = setInterval(refreshAll, state.refresh * 1000); }
+function schedule() { clearInterval(timer); if (state.refresh) timer = setInterval(() => document.hidden || refreshAll(), state.refresh * 1000); }
 const syncUrl = () => history.replaceState(null, "", "?" + params);
 function setRange(v) { state.range = v; [...$("range").children].forEach(b => b.setAttribute("aria-pressed", +b.dataset.v === v)); params.set("range", v); syncUrl(); }
 function setRefresh(v) { state.refresh = v; $("refresh").value = v; params.set("refresh", v); syncUrl(); schedule(); }
-function applyTheme(t) { document.documentElement.dataset.theme = t; store.set("theme", t); }
+function applyTheme(t) { for (const k in cssCache) delete cssCache[k]; document.documentElement.dataset.theme = t; store.set("theme", t); }
 const toggleTheme = () => { applyTheme(document.documentElement.dataset.theme === "dark" ? "light" : "dark"); renderAll(); };
 const kiosk = () => { params.set("kiosk", "1"); location.search = params; };
 
@@ -391,7 +395,8 @@ addEventListener("keydown", e => {
   if (k === "1" || k === "2" || k === "3") { setRange([300, 900, 3600][+k - 1]); refreshAll(); }
   else if (k === "r") refreshAll(); else if (k === "t") toggleTheme(); else if (k === "k") kiosk();
 });
-addEventListener("resize", renderAll);
+addEventListener("resize", scheduleRender);
+document.addEventListener("visibilitychange", () => document.hidden || refreshAll());
 document.fonts?.ready.then(renderAll);
 
 async function main() {
