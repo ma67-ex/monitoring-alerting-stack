@@ -8,11 +8,18 @@ FILES = {"/": ("index.html", "text/html"), "/dashboard.json": ("dashboard.json",
 
 
 class Handler(BaseHTTPRequestHandler):
+    protocol_version = "HTTP/1.1"  # keep-alive; every reply sends Content-Length
+
     def reply(self, code, body, ctype):
         self.send_response(code)
         self.send_header("Content-Type", ctype)
+        self.send_header("Content-Length", str(len(body)))
         self.end_headers()
-        self.wfile.write(body)
+        if self.command != "HEAD":
+            self.wfile.write(body)
+
+    def do_HEAD(self):
+        self.do_GET()
 
     def do_GET(self):
         path = self.path.split("?")[0]
