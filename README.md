@@ -36,11 +36,12 @@ python3 -m unittest discover -s tests
 
 ## Dashboard features
 
-- Time range (5 min, 15 min, 1 hour) and refresh interval (off, 5 s, 15 s, 1 min), kept in the URL.
-- Stat tiles that turn amber or red at configurable thresholds.
-- Hover tooltip, click-to-hide legend, threshold lines, and CSV export on each chart.
-- Light and dark theme, and kiosk mode with `?kiosk`.
-- An "Explore a metric" section: pick any collected metric, choose `rate`, `last` or `quantile`, set a window and grouping, and see a chart and table.
+- Overall status at the top ("All systems normal" or "2 alerts firing"), with how long each alert has been pending or firing.
+- A row of current values with sparklines. Each turns amber or red at its threshold.
+- Four charts with limit lines, a hover tooltip, click-to-hide legend, and CSV download.
+- Time range (5m, 15m, 1h) and refresh interval (off, 5 s, 15 s, 1 min), kept in the URL.
+- Dark and light theme (it follows your system, and the Theme button overrides it), and kiosk mode with `?kiosk` for a wall display.
+- An Explore section: pick any collected metric, choose `rate`, `last` or `p95`, set a window and grouping, and see a chart and table.
 
 The feature list came from studying Prometheus and Grafana. See `docs/reverse-engineering-notes.md`.
 

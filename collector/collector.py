@@ -133,7 +133,8 @@ class Alerts:
                 s["state"] = "firing"
 
     def snapshot(self):
-        return [{"alert": r["alert"], "summary": r.get("summary", ""), **self.state[r["alert"]]} for r in self.rules]
+        return [{"alert": r["alert"], "summary": r.get("summary", ""), "op": r["op"], "threshold": r["threshold"],
+                 "unit": r.get("unit", ""), **self.state[r["alert"]]} for r in self.rules]
 
 
 def scrape(store, url, now):

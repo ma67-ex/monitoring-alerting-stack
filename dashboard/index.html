@@ -5,245 +5,432 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Agent dashboard</title>
 <style>
-  :root { --bg:#0f1117; --card:#181b24; --line:#2a2f3d; --text:#e6e8ee; --muted:#8b93a7; --ok:#5fd38d; --warn:#f0b429; --crit:#e5534b; --accent:#4ea1ff; }
-  :root[data-theme="light"] { --bg:#f4f5f8; --card:#ffffff; --line:#dfe2ea; --text:#1b1f2a; --muted:#5d6577; --ok:#1a8f4e; --warn:#b7791f; --crit:#c0392b; --accent:#1f6feb; }
+  :root {
+    color-scheme: dark;
+    --bg: oklch(0.165 0.012 255);
+    --surface: oklch(0.2 0.014 255);
+    --raised: oklch(0.245 0.016 255);
+    --line: oklch(0.3 0.016 255);
+    --text: oklch(0.95 0.005 255);
+    --muted: oklch(0.74 0.02 255);
+    --accent: oklch(0.78 0.12 230);
+    --ok: oklch(0.78 0.16 155);
+    --warn: oklch(0.83 0.15 85);
+    --crit: oklch(0.7 0.2 25);
+    --crit-bg: oklch(0.27 0.07 25);
+    --warn-bg: oklch(0.28 0.05 85);
+    --s1: oklch(0.78 0.12 230); --s2: oklch(0.83 0.15 85); --s3: oklch(0.78 0.16 155);
+    --s4: oklch(0.74 0.16 340); --s5: oklch(0.74 0.14 290); --s6: oklch(0.8 0.1 190);
+    --font: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    --ease: cubic-bezier(0.25, 1, 0.5, 1);
+  }
+  :root[data-theme="light"] {
+    color-scheme: light;
+    --bg: oklch(0.962 0.004 255);
+    --surface: oklch(0.995 0.002 255);
+    --raised: oklch(0.94 0.006 255);
+    --line: oklch(0.88 0.008 255);
+    --text: oklch(0.22 0.02 255);
+    --muted: oklch(0.46 0.02 255);
+    --accent: oklch(0.5 0.16 250);
+    --ok: oklch(0.5 0.14 155);
+    --warn: oklch(0.52 0.13 70);
+    --crit: oklch(0.5 0.2 25);
+    --crit-bg: oklch(0.94 0.04 25);
+    --warn-bg: oklch(0.95 0.05 85);
+    --s1: oklch(0.5 0.16 250); --s2: oklch(0.55 0.14 70); --s3: oklch(0.5 0.14 155);
+    --s4: oklch(0.52 0.18 340); --s5: oklch(0.5 0.16 290); --s6: oklch(0.5 0.1 200);
+  }
   * { box-sizing: border-box; }
-  body { margin:0; padding:16px; background:var(--bg); color:var(--text); font:14px system-ui, sans-serif; }
-  header { display:flex; flex-wrap:wrap; gap:12px; align-items:center; justify-content:space-between; margin-bottom:12px; }
-  h1 { font-size:18px; margin:0; }
-  .controls { display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
-  select, button, input { background:var(--card); color:var(--text); border:1px solid var(--line); border-radius:6px; padding:5px 9px; font:inherit; }
-  button { cursor:pointer; } button:hover { border-color:var(--accent); }
-  #alerts { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:16px; }
-  .chip { padding:4px 10px; border-radius:999px; border:1px solid var(--line); font-size:12px; }
-  .chip.inactive { color:var(--ok); }
-  .chip.pending { color:var(--warn); border-color:var(--warn); }
-  .chip.firing { color:#fff; background:var(--crit); border-color:var(--crit); }
-  #stats { display:grid; grid-template-columns:repeat(auto-fit, minmax(150px, 1fr)); gap:12px; margin-bottom:16px; }
-  .stat { background:var(--card); border:1px solid var(--line); border-radius:8px; padding:12px; }
-  .stat span { color:var(--muted); font-size:12px; } .stat b { display:block; font-size:26px; margin-top:4px; }
-  .stat.warn b { color:var(--warn); } .stat.crit b { color:var(--crit); }
-  #grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(320px, 1fr)); gap:16px; }
-  .panel { background:var(--card); border:1px solid var(--line); border-radius:8px; padding:12px; }
-  .panel h2 { font-size:13px; margin:0 0 8px; display:flex; justify-content:space-between; align-items:center; color:var(--muted); font-weight:600; }
-  .panel h2 button { font-size:11px; padding:2px 7px; }
-  canvas { width:100%; height:200px; display:block; }
-  .legend { display:flex; flex-wrap:wrap; gap:10px; margin-top:6px; font-size:12px; color:var(--muted); }
-  .legend span { cursor:pointer; } .legend span.off { opacity:.35; text-decoration:line-through; }
-  .legend i { display:inline-block; width:10px; height:3px; margin-right:4px; vertical-align:middle; }
-  details { margin-top:16px; } summary { cursor:pointer; color:var(--muted); margin-bottom:8px; }
-  #explore .row { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:10px; }
-  table { border-collapse:collapse; width:100%; font-size:12px; margin-top:8px; } td, th { text-align:left; padding:4px 8px; border-bottom:1px solid var(--line); }
-  .kiosk header .controls, .kiosk details { display:none; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.45 var(--font); font-variant-numeric: tabular-nums; }
+  main { max-width: 1280px; margin: 0 auto; padding: 24px 24px 64px; }
+  button, select, input { font: inherit; color: var(--text); }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  /* top bar */
+  .top { display: flex; flex-wrap: wrap; gap: 16px 24px; align-items: center; justify-content: space-between; margin-bottom: 20px; }
+  h1 { font-size: 15px; font-weight: 600; margin: 0; color: var(--muted); }
+  .status { display: flex; align-items: center; gap: 10px; font-size: 20px; font-weight: 600; margin-top: 2px; }
+  .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--ok); flex: none; }
+  .status[data-s="pending"] .dot { background: var(--warn); }
+  .status[data-s="firing"] .dot { background: var(--crit); }
+  .controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; background: var(--surface); }
+  .seg button { border: 0; background: none; padding: 7px 12px; cursor: pointer; color: var(--muted); transition: background 150ms var(--ease), color 150ms var(--ease); }
+  .seg button + button { border-left: 1px solid var(--line); }
+  .seg button:hover { background: var(--raised); color: var(--text); }
+  .seg button[aria-pressed="true"] { background: var(--raised); color: var(--text); font-weight: 600; }
+  .btn, select, input { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 7px 12px; }
+  .btn { cursor: pointer; transition: background 150ms var(--ease); }
+  .btn:hover, select:hover { background: var(--raised); }
+  .btn:disabled { opacity: .5; cursor: not-allowed; }
+  .live { color: var(--muted); font-size: 12px; display: flex; align-items: center; gap: 6px; }
+  .live i { width: 6px; height: 6px; border-radius: 50%; background: var(--ok); }
+  .live.off i { background: var(--muted); }
+
+  /* shared grouped surface: hairline-divided cells, not floating cards */
+  .group { display: grid; gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; margin-bottom: 20px; }
+  .group > * { background: var(--surface); }
+  h2 { font-size: 13px; font-weight: 600; color: var(--muted); margin: 28px 0 10px; }
+
+  /* alerts */
+  .alerts { grid-template-columns: 1fr; }
+  .alert { display: grid; grid-template-columns: 14px minmax(140px, 190px) 1fr auto; gap: 12px; align-items: center; padding: 9px 16px; }
+  .alert[data-s="inactive"] .val small { display: none; }
+  .alert .dot { width: 8px; height: 8px; }
+  .alert[data-s="pending"] .dot { background: var(--warn); } .alert[data-s="firing"] .dot { background: var(--crit); }
+  .alert[data-s="firing"] { background: var(--crit-bg); } .alert[data-s="pending"] { background: var(--warn-bg); }
+  .alert b { font-weight: 600; }
+  .alert .sum { color: var(--muted); }
+  .alert .val { text-align: right; white-space: nowrap; }
+  .alert .val small { color: var(--muted); display: block; font-size: 12px; }
+  .alert[data-s="inactive"] b { font-weight: 500; }
+
+  /* signals strip */
+  .signals { grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
+  .signal { padding: 16px 18px 14px; display: grid; gap: 2px; }
+  .signal .k { color: var(--muted); font-size: 13px; display: flex; align-items: center; gap: 8px; }
+  .signal .v { font-size: 32px; font-weight: 600; line-height: 1.15; letter-spacing: -0.01em; }
+  .signal .lim { color: var(--muted); font-size: 12px; min-height: 18px; }
+  .signal[data-s="warn"] .v { color: var(--warn); } .signal[data-s="crit"] .v { color: var(--crit); }
+  .signal[data-s="warn"] .dot { background: var(--warn); } .signal[data-s="crit"] .dot { background: var(--crit); }
+  .signal .dot { width: 7px; height: 7px; }
+  .signal canvas { width: 100%; height: 32px; margin-top: 6px; display: block; }
+
+  /* charts */
+  .charts { grid-template-columns: repeat(auto-fit, minmax(min(100%, 460px), 1fr)); }
+  .chart { padding: 16px 18px 12px; position: relative; }
+  .chart header { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; margin-bottom: 8px; }
+  .chart h3 { margin: 0; font-size: 14px; font-weight: 600; }
+  .chart .now { font-size: 14px; color: var(--muted); }
+  .chart .now b { color: var(--text); font-size: 18px; font-weight: 600; margin-right: 10px; }
+  .chart canvas { width: 100%; height: 240px; display: block; }
+  .link { background: none; border: 0; color: var(--muted); cursor: pointer; font-size: 12px; padding: 2px 4px; border-radius: 4px; }
+  .link:hover { color: var(--text); text-decoration: underline; }
+  .legend { display: flex; flex-wrap: wrap; gap: 4px 14px; margin-top: 6px; min-height: 22px; font-size: 12px; }
+  .legend button { background: none; border: 0; color: var(--muted); cursor: pointer; padding: 2px 0; display: flex; align-items: center; gap: 6px; }
+  .legend button:hover { color: var(--text); }
+  .legend button[aria-pressed="false"] { opacity: .45; text-decoration: line-through; }
+  .legend i { width: 12px; height: 3px; border-radius: 2px; }
+
+  /* skeleton */
+  .skel { color: transparent !important; background: var(--raised); border-radius: 6px; animation: pulse 1.4s ease-in-out infinite; }
+  @keyframes pulse { 50% { opacity: .5; } }
+
+  /* explore */
+  .explore .form { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end; padding: 16px 18px; }
+  .explore label { display: grid; gap: 4px; font-size: 12px; color: var(--muted); }
+  .explore input[type=number] { width: 90px; }
+  .explore input[type=text] { width: 220px; }
+  .explore .out { padding: 0 18px 16px; }
+  .explore table { border-collapse: collapse; width: 100%; font-size: 13px; margin-top: 10px; }
+  .explore th, .explore td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--line); }
+  .explore th { color: var(--muted); font-weight: 500; }
+  .explore .hint { color: var(--muted); padding: 4px 18px 16px; margin: 0; }
+
+  .kiosk .controls, .kiosk .explore-wrap { display: none; }
+  .kiosk main { max-width: none; }
+  @media (max-width: 640px) {
+    main { padding: 16px 12px 48px; }
+    .alert { grid-template-columns: 14px 1fr auto; } .alert .sum { display: none; }
+    .signal .v { font-size: 26px; }
+  }
+  @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
 </style>
 </head>
 <body>
-<header>
-  <h1 id="title">Dashboard</h1>
-  <div class="controls">
-    <label>Range <select id="range">
-      <option value="300">5 min</option><option value="900">15 min</option><option value="3600">1 hour</option></select></label>
-    <label>Refresh <select id="refresh">
-      <option value="0">Off</option><option value="5">5 s</option><option value="15">15 s</option><option value="60">1 min</option></select></label>
-    <button id="now">Refresh now</button>
-    <button id="theme">Theme</button>
-    <button id="kiosk">Kiosk</button>
+<main>
+  <div class="top">
+    <div>
+      <h1 id="title">Dashboard</h1>
+      <div class="status" id="status" data-s="inactive"><span class="dot"></span><span id="status-text">Checking…</span></div>
+    </div>
+    <div class="controls">
+      <span class="live off" id="live"><i></i><span id="live-text">Loading</span></span>
+      <div class="seg" role="group" aria-label="Time range" id="range">
+        <button data-v="300" aria-pressed="true">5m</button><button data-v="900" aria-pressed="false">15m</button><button data-v="3600" aria-pressed="false">1h</button>
+      </div>
+      <label class="visually"><select id="refresh" aria-label="Refresh interval">
+        <option value="0">Refresh: off</option><option value="5">Refresh: 5 s</option><option value="15">Refresh: 15 s</option><option value="60">Refresh: 1 min</option></select></label>
+      <button class="btn" id="now">Refresh now</button>
+      <button class="btn" id="theme" aria-label="Toggle light or dark theme">Theme</button>
+      <button class="btn" id="kiosk">Kiosk</button>
+    </div>
   </div>
-</header>
-<div id="alerts"></div>
-<div id="stats"></div>
-<div id="grid"></div>
-<details id="explore">
-  <summary>Explore a metric</summary>
-  <div class="row">
-    <select id="x-metric"></select>
-    <select id="x-fn"><option>rate</option><option>last</option><option>quantile</option></select>
-    <input id="x-window" type="number" value="30" min="5" style="width:80px" title="window in seconds">
-    <input id="x-by" placeholder="group by label(s), comma separated" style="width:240px">
-    <button id="x-run">Run</button>
+
+  <div class="group signals" id="signals" aria-label="Current values"></div>
+  <div class="group alerts" id="alerts" aria-label="Alerts"></div>
+  <div class="group charts" id="charts"></div>
+
+  <div class="explore-wrap">
+    <h2>Explore</h2>
+    <div class="group explore">
+      <div class="form">
+        <label>Metric <select id="x-metric"></select></label>
+        <label>Function <select id="x-fn"><option value="rate">rate (per second)</option><option value="last">last value</option><option value="quantile">p95 (histogram)</option></select></label>
+        <label>Window (s) <input id="x-window" type="number" value="30" min="5"></label>
+        <label>Group by <input id="x-by" type="text" placeholder="e.g. status, tool"></label>
+        <button class="btn" id="x-run">Run</button>
+      </div>
+      <p class="hint" id="x-hint">Pick a collected metric and run it. For histograms, choose the <code>_bucket</code> metric and p95.</p>
+      <div class="out" id="x-out" hidden>
+        <div class="chart" style="padding:0"><canvas style="height:220px"></canvas><div class="legend"></div></div>
+        <table></table>
+      </div>
+    </div>
   </div>
-  <div class="panel" id="x-panel" hidden><canvas></canvas><div class="legend"></div><table></table></div>
-</details>
+</main>
 <script>
-const COLORS = ["#4ea1ff", "#f0b429", "#5fd38d", "#e66aa8", "#a78bfa", "#2dd4bf"];
+const $ = id => document.getElementById(id);
+const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const series = i => css(`--s${(i % 6) + 1}`);
+const esc = s => String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const label = l => Object.entries(l).map(([k, v]) => `${k}=${v}`).join(", ") || "total";
+const store = { get: k => { try { return localStorage.getItem(k); } catch { return null; } },
+                set: (k, v) => { try { localStorage.setItem(k, v); } catch {} } };
+const params = new URLSearchParams(location.search);
+const state = { range: +(params.get("range") || 300), refresh: +(params.get("refresh") ?? 5) };
+
 const UNITS = {
   reqps:   v => v.toFixed(2) + " req/s",
   percent: v => (v * 100).toFixed(1) + "%",
   seconds: v => v < 1 ? (v * 1000).toFixed(0) + " ms" : v.toFixed(2) + " s",
   ops:     v => v.toFixed(2) + " /s",
+  up:      v => v >= 1 ? "up" : "down",
 };
-const esc = s => String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
-const label = l => Object.entries(l).map(([k, v]) => `${k}=${v}`).join(", ") || "total";
-const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
-const store = { get: k => { try { return localStorage.getItem(k); } catch { return null; } },
-                set: (k, v) => { try { localStorage.setItem(k, v); } catch {} } };
-const params = new URLSearchParams(location.search);
-const $ = id => document.getElementById(id);
-
-const state = { range: +(params.get("range") || 300), refresh: +(params.get("refresh") ?? 5) };
+const fmtFor = u => UNITS[u] || (v => (Math.abs(v) >= 100 ? v.toFixed(0) : v.toPrecision(3)));
+const dur = s => s < 60 ? `${Math.round(s)}s` : `${Math.floor(s / 60)}m ${Math.round(s % 60)}s`;
 
 async function query(spec) {
-  const step = Math.max(5, Math.round(state.range / 60));
+  const step = Math.max(5, Math.round(state.range / 90));
   const url = `/api/query_range?span=${state.range}&step=${step}&spec=${encodeURIComponent(JSON.stringify(spec))}`;
-  return (await fetch(url)).json();
+  const r = await fetch(url);
+  if (!r.ok) throw new Error(r.status);
+  return r.json();
 }
 
+/* ---- axis helpers ---- */
+function niceMax(v) {
+  if (v <= 0) return 1;
+  const p = 10 ** Math.floor(Math.log10(v)), f = v / p;
+  return (f <= 1 ? 1 : f <= 2 ? 2 : f <= 2.5 ? 2.5 : f <= 5 ? 5 : 10) * p;
+}
+const timeLabel = (t, span) => new Date(t * 1000).toLocaleTimeString([], span > 600 ? { hour: "2-digit", minute: "2-digit" } : { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+
 class Chart {
-  constructor(canvas, fmt, crit) {
-    Object.assign(this, { canvas, fmt, crit, series: [], hidden: new Set(), hover: null });
+  constructor(canvas, fmt, opts = {}) {
+    Object.assign(this, { canvas, fmt, crit: opts.crit, empty: opts.empty, series: [], hidden: new Set(), hover: null });
     canvas.addEventListener("mousemove", e => { this.hover = e.offsetX; this.render(); });
     canvas.addEventListener("mouseleave", () => { this.hover = null; this.render(); });
   }
-  setData(series) { this.series = series; this.render(); }
+  setData(s) { this.series = s; this.render(); }
   render() {
     const { canvas, fmt } = this, dpr = devicePixelRatio || 1, w = canvas.clientWidth, h = canvas.clientHeight;
+    if (!w) return;
     canvas.width = w * dpr; canvas.height = h * dpr;
     const c = canvas.getContext("2d"); c.scale(dpr, dpr);
-    const pad = { l: 64, r: 8, t: 8, b: 20 }, span = state.range, t1 = Date.now() / 1000, t0 = t1 - span;
+    const pad = { l: 72, r: 14, t: 10, b: 28 }, span = state.range, t1 = Date.now() / 1000, t0 = t1 - span;
     const shown = this.series.filter((_, i) => !this.hidden.has(i));
-    const top = Math.max(1e-9, this.crit || 0, ...shown.flatMap(s => s.points.map(p => p[1]))) * 1.15;
+    const peak = Math.max(0, ...shown.flatMap(s => s.points.map(p => p[1])));
+    const top = niceMax(Math.max(peak, this.crit ? this.crit * 1.1 : 0));
+    c.font = `12px ${css("--font")}`;
+    pad.l = Math.ceil(Math.max(...[0, 1, 2, 3, 4].map(i => c.measureText(fmt(top * i / 4)).width))) + 20;
     const X = t => pad.l + (t - t0) / span * (w - pad.l - pad.r), Y = v => h - pad.b - v / top * (h - pad.t - pad.b);
-    c.font = "11px system-ui"; c.lineWidth = 1;
+    const line = css("--line"), muted = css("--muted");
+    c.font = `12px ${css("--font")}`; c.lineWidth = 1;
     for (let i = 0; i <= 4; i++) {
-      const v = top * i / 4, y = Y(v);
-      c.strokeStyle = css("--line"); c.beginPath(); c.moveTo(pad.l, y); c.lineTo(w - pad.r, y); c.stroke();
-      c.fillStyle = css("--muted"); c.textAlign = "right"; c.fillText(fmt(v), pad.l - 6, y + 4);
+      const v = top * i / 4, y = Math.round(Y(v)) + 0.5;
+      c.strokeStyle = line; c.beginPath(); c.moveTo(pad.l, y); c.lineTo(w - pad.r, y); c.stroke();
+      c.fillStyle = muted; c.textAlign = "right"; c.fillText(fmt(v), pad.l - 10, y + 4);
     }
-    c.textAlign = "center";
-    for (let i = 0; i <= 5; i++) {
-      const t = t0 + span * i / 5;
-      c.fillText(new Date(t * 1000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }), X(t), h - 5);
+    const ticks = Math.max(2, Math.min(6, Math.floor((w - pad.l - pad.r) / (span > 600 ? 90 : 120))));
+    c.textAlign = "center"; c.fillStyle = muted;
+    for (let i = 0; i <= ticks; i++) {
+      const t = t0 + span * i / ticks;
+      c.textAlign = i === 0 ? "left" : i === ticks ? "right" : "center";
+      c.fillText(timeLabel(t, span), X(t) + (i === 0 ? -4 : i === ticks ? 4 : 0), h - 8);
     }
     if (this.crit) {
-      c.strokeStyle = css("--crit"); c.setLineDash([5, 4]); c.beginPath();
+      c.strokeStyle = css("--crit"); c.setLineDash([6, 5]); c.lineWidth = 1.25; c.beginPath();
       c.moveTo(pad.l, Y(this.crit)); c.lineTo(w - pad.r, Y(this.crit)); c.stroke(); c.setLineDash([]);
+      c.fillStyle = css("--crit"); c.textAlign = "right"; c.fillText(`limit ${fmt(this.crit)}`, w - pad.r, Y(this.crit) - 6);
+    }
+    if (!this.series.length) {
+      c.fillStyle = muted; c.textAlign = "center"; c.font = `13px ${css("--font")}`;
+      c.fillText(this.empty || "No data in this range", (pad.l + w - pad.r) / 2, (pad.t + h - pad.b) / 2);
+      return;
     }
     this.series.forEach((s, i) => {
-      if (this.hidden.has(i)) return;
-      c.strokeStyle = COLORS[i % COLORS.length]; c.lineWidth = 2; c.beginPath();
+      if (this.hidden.has(i) || !s.points.length) return;
+      const col = series(i);
+      c.beginPath();
       s.points.forEach(([t, v], j) => j ? c.lineTo(X(t), Y(v)) : c.moveTo(X(t), Y(v)));
-      c.stroke();
+      c.strokeStyle = col; c.lineWidth = 2; c.lineJoin = "round"; c.stroke();
+      if (this.series.length === 1) {
+        c.lineTo(X(s.points.at(-1)[0]), Y(0)); c.lineTo(X(s.points[0][0]), Y(0)); c.closePath();
+        c.globalAlpha = 0.12; c.fillStyle = col; c.fill(); c.globalAlpha = 1;
+      }
+      const [lt, lv] = s.points.at(-1);
+      c.fillStyle = col; c.beginPath(); c.arc(X(lt), Y(lv), 3.5, 0, 7); c.fill();
     });
-    if (this.hover !== null && this.hover > pad.l) this.tooltip(c, X, Y, t0, span, pad, w, h);
+    if (this.hover !== null && this.hover > pad.l && this.hover < w - pad.r) this.tooltip(c, X, Y, t0, span, pad, w, h);
   }
   tooltip(c, X, Y, t0, span, pad, w, h) {
-    const t = t0 + (this.hover - pad.l) / (w - pad.l - pad.r) * span;
-    const rows = [];
+    const t = t0 + (this.hover - pad.l) / (w - pad.l - pad.r) * span, rows = [];
     this.series.forEach((s, i) => {
       if (this.hidden.has(i) || !s.points.length) return;
       const p = s.points.reduce((a, b) => Math.abs(b[0] - t) < Math.abs(a[0] - t) ? b : a);
-      rows.push({ text: `${label(s.labels)}: ${this.fmt(p[1])}`, color: COLORS[i % COLORS.length], x: X(p[0]), y: Y(p[1]) });
+      rows.push({ text: `${label(s.labels)}  ${this.fmt(p[1])}`, color: series(i), x: X(p[0]), y: Y(p[1]) });
     });
     if (!rows.length) return;
-    c.strokeStyle = css("--muted"); c.lineWidth = 1; c.beginPath(); c.moveTo(this.hover, pad.t); c.lineTo(this.hover, h - pad.b); c.stroke();
-    rows.forEach(r => { c.fillStyle = r.color; c.beginPath(); c.arc(r.x, r.y, 3.5, 0, 7); c.fill(); });
-    const lines = [new Date(t * 1000).toLocaleTimeString(), ...rows.map(r => r.text)];
-    const bw = Math.max(...lines.map(l => c.measureText(l).width)) + 16, bh = lines.length * 15 + 8;
-    const bx = this.hover + 12 + bw > w ? this.hover - bw - 12 : this.hover + 12;
-    c.fillStyle = css("--card"); c.strokeStyle = css("--line"); c.fillRect(bx, pad.t, bw, bh); c.strokeRect(bx, pad.t, bw, bh);
-    c.fillStyle = css("--text"); c.textAlign = "left";
-    lines.forEach((l, i) => c.fillText(l, bx + 8, pad.t + 16 + i * 15));
+    c.strokeStyle = css("--muted"); c.lineWidth = 1; c.globalAlpha = 0.6;
+    c.beginPath(); c.moveTo(this.hover + 0.5, pad.t); c.lineTo(this.hover + 0.5, h - pad.b); c.stroke(); c.globalAlpha = 1;
+    rows.forEach(r => { c.fillStyle = css("--surface"); c.beginPath(); c.arc(r.x, r.y, 5, 0, 7); c.fill(); c.fillStyle = r.color; c.beginPath(); c.arc(r.x, r.y, 3.5, 0, 7); c.fill(); });
+    c.font = `12px ${css("--font")}`;
+    const head = new Date(t * 1000).toLocaleTimeString(), lines = [head, ...rows.map(r => r.text)];
+    const bw = Math.max(...lines.map(l => c.measureText(l).width)) + 28, bh = lines.length * 18 + 12;
+    const bx = this.hover + 14 + bw > w ? this.hover - bw - 14 : this.hover + 14, by = pad.t + 4;
+    c.fillStyle = css("--raised"); c.strokeStyle = css("--line");
+    c.beginPath(); c.roundRect(bx, by, bw, bh, 6); c.fill(); c.stroke();
+    c.textAlign = "left";
+    lines.forEach((l, i) => {
+      c.fillStyle = i ? css("--text") : css("--muted"); c.fillText(l, bx + (i ? 20 : 10), by + 20 + i * 18);
+      if (i) { c.fillStyle = rows[i - 1].color; c.fillRect(bx + 10, by + 14 + i * 18, 6, 6); }
+    });
   }
 }
 
-function csv(series) {
+function spark(canvas, pts, color) {
+  const dpr = devicePixelRatio || 1, w = canvas.clientWidth, h = canvas.clientHeight;
+  if (!w) return;
+  canvas.width = w * dpr; canvas.height = h * dpr;
+  const c = canvas.getContext("2d"); c.scale(dpr, dpr);
+  if (pts.length < 2) return;
+  const max = Math.max(...pts.map(p => p[1]), 1e-9), min = Math.min(...pts.map(p => p[1]), 0);
+  const X = i => i / (pts.length - 1) * (w - 2) + 1, Y = v => h - 3 - (v - min) / (max - min || 1) * (h - 6);
+  c.beginPath(); pts.forEach((p, i) => i ? c.lineTo(X(i), Y(p[1])) : c.moveTo(X(i), Y(p[1])));
+  c.strokeStyle = color; c.lineWidth = 1.5; c.lineJoin = "round"; c.stroke();
+}
+
+const total = series => {
+  const sum = new Map();
+  series.forEach(s => s.points.forEach(([t, v]) => sum.set(t, (sum.get(t) || 0) + v)));
+  return [...sum].sort((a, b) => a[0] - b[0]);
+};
+
+function csv(s) {
   const rows = ["time,series,value"];
-  series.forEach(s => s.points.forEach(([t, v]) => rows.push(`${new Date(t * 1000).toISOString()},"${label(s.labels).replace(/"/g, '""')}",${v}`)));
+  s.forEach(x => x.points.forEach(([t, v]) => rows.push(`${new Date(t * 1000).toISOString()},"${label(x.labels).replace(/"/g, '""')}",${v}`)));
   return rows.join("\n");
 }
 function download(name, text) {
   const a = document.createElement("a");
-  a.href = URL.createObjectURL(new Blob([text], { type: "text/csv" }));
-  a.download = name; a.click(); URL.revokeObjectURL(a.href);
+  a.href = URL.createObjectURL(new Blob([text], { type: "text/csv" })); a.download = name; a.click(); URL.revokeObjectURL(a.href);
 }
 
-function legendFor(el, chart, series) {
-  const many = series.length > 1 || Object.keys(series[0]?.labels || {}).length;
-  el.innerHTML = many ? series.map((s, i) =>
-    `<span data-i="${i}" class="${chart.hidden.has(i) ? "off" : ""}"><i style="background:${COLORS[i % COLORS.length]}"></i>${esc(label(s.labels))}</span>`).join("") : "";
+function legend(el, chart) {
+  const s = chart.series;
+  const worth = s.length > 1 || Object.keys(s[0]?.labels || {}).length;
+  el.innerHTML = worth ? s.map((x, i) =>
+    `<button data-i="${i}" aria-pressed="${!chart.hidden.has(i)}"><i style="background:${series(i)}"></i>${esc(label(x.labels))}</button>`).join("") : "";
   el.onclick = e => {
-    const i = e.target.closest("span")?.dataset.i;
-    if (i === undefined) return;
-    chart.hidden.has(+i) ? chart.hidden.delete(+i) : chart.hidden.add(+i);
-    legendFor(el, chart, series); chart.render();
+    const b = e.target.closest("button"); if (!b) return;
+    const i = +b.dataset.i; chart.hidden.has(i) ? chart.hidden.delete(i) : chart.hidden.add(i);
+    legend(el, chart); chart.render();
   };
 }
 
-const lastSum = series => series.length ? series.reduce((a, s) => a + s.points[s.points.length - 1][1], 0) : null;
-
-async function build(dash) {
+/* ---- build ---- */
+function build(dash) {
   $("title").textContent = dash.title; document.title = dash.title;
-  const panels = dash.panels.map(p => {
-    const fmt = UNITS[p.unit] || (v => v.toFixed(2));
+  const items = [];
+  for (const p of dash.panels) {
+    const fmt = fmtFor(p.unit);
     if (p.type === "stat") {
-      const el = document.createElement("div"); el.className = "stat";
-      el.innerHTML = `<span>${esc(p.title)}</span><b>…</b>`; $("stats").appendChild(el);
-      return { p, async refresh() {
-        const series = await query(p.query), v = lastSum(series);
-        el.querySelector("b").textContent = v === null ? "no data" : fmt(v);
-        el.className = "stat " + (v === null ? "" : p.crit !== undefined && v >= p.crit ? "crit" : p.warn !== undefined && v >= p.warn ? "warn" : "");
-      } };
+      const el = document.createElement("div"); el.className = "signal";
+      el.innerHTML = `<span class="k"><span class="dot"></span>${esc(p.title)}</span><span class="v skel">0000</span><span class="lim"></span><canvas></canvas>`;
+      $("signals").appendChild(el);
+      const v = el.querySelector(".v"), lim = el.querySelector(".lim"), cv = el.querySelector("canvas");
+      lim.textContent = p.crit !== undefined ? `limit ${fmt(p.crit)}` : p.warn !== undefined ? `warn at ${fmt(p.warn)}` : "";
+      items.push({ async refresh() {
+        const pts = total(await query(p.query)), last = pts.at(-1)?.[1];
+        v.classList.remove("skel");
+        v.textContent = last === undefined ? "no data" : fmt(last);
+        el.dataset.s = last === undefined ? "" : p.crit !== undefined && last >= p.crit ? "crit" : p.warn !== undefined && last >= p.warn ? "warn" : "";
+        spark(cv, pts, css("--accent"));
+      } });
+    } else {
+      const el = document.createElement("section"); el.className = "chart";
+      el.innerHTML = `<header><h3>${esc(p.title)}</h3><span class="now"><b class="skel">0000</b><button class="link">Download CSV</button></span></header><canvas></canvas><div class="legend"></div>`;
+      $("charts").appendChild(el);
+      const chart = new Chart(el.querySelector("canvas"), fmt, { crit: p.crit, empty: p.empty });
+      const now = el.querySelector("b"), lg = el.querySelector(".legend");
+      el.querySelector(".link").onclick = () => download(`${p.title}.csv`, csv(chart.series));
+      items.push({ chart, async refresh() {
+        const s = await query(p.query); chart.setData(s); legend(lg, chart);
+        const last = total(s).at(-1)?.[1];
+        now.classList.remove("skel"); now.textContent = last === undefined ? "no data" : fmt(last);
+      } });
     }
-    const el = document.createElement("div"); el.className = "panel";
-    el.innerHTML = `<h2><span>${esc(p.title)}</span><span><b></b> <button>CSV</button></span></h2><canvas></canvas><div class="legend"></div>`;
-    $("grid").appendChild(el);
-    const chart = new Chart(el.querySelector("canvas"), fmt, p.crit), now = el.querySelector("b"), legend = el.querySelector(".legend");
-    el.querySelector("button").onclick = () => download(`${p.title}.csv`, csv(chart.series));
-    return { p, async refresh() {
-      const series = await query(p.query);
-      chart.setData(series); legendFor(legend, chart, series);
-      const v = lastSum(series); now.textContent = v === null ? "no data" : fmt(v);
-    } };
-  });
-  return panels;
+  }
+  return items;
 }
 
 async function refreshAlerts() {
   const alerts = await (await fetch("/api/alerts")).json(), now = Date.now() / 1000;
   $("alerts").innerHTML = alerts.map(a => {
-    const dur = a.since ? ` for ${Math.round(now - a.since)}s` : "";
-    return `<span class="chip ${a.state}" title="${esc(a.summary)}">${esc(a.alert)}: ${a.state}${a.state === "inactive" ? "" : dur}</span>`;
+    const fmt = fmtFor(a.unit), val = a.value === null ? "no data" : fmt(a.value);
+    const since = a.since && a.state !== "inactive" ? `${a.state} for ${dur(now - a.since)}` : "";
+    return `<div class="alert" data-s="${a.state}"><span class="dot"></span><b>${esc(a.alert)}</b><span class="sum">${esc(a.summary)}</span>` +
+           `<span class="val">${esc(val)}<small>${since || (a.unit === "up" ? "fires when down" : `limit ${esc(a.op)} ${esc(fmt(a.threshold))}`)}</small></span></div>`;
   }).join("");
+  const firing = alerts.filter(a => a.state === "firing").length, pending = alerts.filter(a => a.state === "pending").length;
+  const s = firing ? "firing" : pending ? "pending" : "inactive";
+  $("status").dataset.s = s;
+  $("status-text").textContent = firing ? `${firing} alert${firing > 1 ? "s" : ""} firing` : pending ? `${pending} pending` : "All systems normal";
 }
 
-let panels = [], timer = null;
+let items = [], timer = null;
 async function refreshAll() {
-  await Promise.all(panels.map(p => p.refresh().catch(() => {})));
-  refreshAlerts().catch(() => {});
+  $("live-text").textContent = "Updating…";
+  const results = await Promise.allSettled([...items.map(i => i.refresh()), refreshAlerts()]);
+  const failed = results.some(r => r.status === "rejected");
+  $("live").classList.toggle("off", failed || !state.refresh);
+  $("live-text").textContent = failed ? "Collector unreachable" : `Updated ${new Date().toLocaleTimeString()}`;
 }
-function schedule() {
-  clearInterval(timer);
-  if (state.refresh) timer = setInterval(refreshAll, state.refresh * 1000);
-}
+function schedule() { clearInterval(timer); if (state.refresh) timer = setInterval(refreshAll, state.refresh * 1000); }
+const syncUrl = () => history.replaceState(null, "", "?" + params);
 
 async function setupExplore() {
   const metrics = await (await fetch("/api/metrics")).json();
   $("x-metric").innerHTML = metrics.map(m => `<option>${esc(m.name)}</option>`).join("");
-  const xchart = new Chart($("x-panel").querySelector("canvas"), v => v.toPrecision(3), 0);
+  const chart = new Chart($("x-out").querySelector("canvas"), v => v.toPrecision(3), {});
   $("x-run").onclick = async () => {
-    const fn = $("x-fn").value, metric = $("x-metric").value, w = +$("x-window").value || 30;
+    const fn = $("x-fn").value, metric = $("x-metric").value, window = +$("x-window").value || 30;
     const by = $("x-by").value.split(",").map(s => s.trim()).filter(Boolean);
-    const spec = fn === "quantile" ? { fn, q: 0.95, metric, window: w } : { fn, metric, window: w, by };
-    const series = await query(spec);
-    $("x-panel").hidden = false; xchart.hidden.clear(); xchart.setData(series);
-    legendFor($("x-panel").querySelector(".legend"), xchart, series);
-    $("x-panel").querySelector("table").innerHTML = "<tr><th>series</th><th>latest</th></tr>" +
-      series.map(s => `<tr><td>${esc(label(s.labels))}</td><td>${s.points.length ? s.points[s.points.length - 1][1].toPrecision(4) : ""}</td></tr>`).join("");
+    const s = await query(fn === "quantile" ? { fn, q: 0.95, metric, window } : { fn, metric, window, by });
+    $("x-hint").hidden = true; $("x-out").hidden = false; chart.hidden.clear(); chart.setData(s); legend($("x-out").querySelector(".legend"), chart);
+    $("x-out").querySelector("table").innerHTML = "<tr><th>Series</th><th>Latest</th></tr>" +
+      s.map(x => `<tr><td>${esc(label(x.labels))}</td><td>${x.points.length ? x.points.at(-1)[1].toPrecision(4) : ""}</td></tr>`).join("");
   };
 }
 
-function applyTheme(t) { document.documentElement.dataset.theme = t; store.set("theme", t); window.dispatchEvent(new Event("resize")); }
+function applyTheme(t) { document.documentElement.dataset.theme = t; store.set("theme", t); }
+function rerender() { items.forEach(i => i.chart?.render()); refreshAll(); }
 
 async function main() {
   applyTheme(store.get("theme") || (matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark"));
   if (params.has("kiosk")) document.body.classList.add("kiosk");
-  $("range").value = state.range; $("refresh").value = state.refresh;
-  $("range").onchange = e => { state.range = +e.target.value; params.set("range", state.range); history.replaceState(null, "", "?" + params); refreshAll(); };
-  $("refresh").onchange = e => { state.refresh = +e.target.value; params.set("refresh", state.refresh); history.replaceState(null, "", "?" + params); schedule(); };
+  $("refresh").value = state.refresh;
+  const setRange = v => { state.range = v; [...$("range").children].forEach(b => b.setAttribute("aria-pressed", +b.dataset.v === v)); };
+  setRange(state.range);
+  $("range").onclick = e => { const b = e.target.closest("button"); if (!b) return; setRange(+b.dataset.v); params.set("range", state.range); syncUrl(); refreshAll(); };
+  $("refresh").onchange = e => { state.refresh = +e.target.value; params.set("refresh", state.refresh); syncUrl(); schedule(); refreshAll(); };
   $("now").onclick = refreshAll;
-  $("theme").onclick = () => { applyTheme(document.documentElement.dataset.theme === "dark" ? "light" : "dark"); refreshAll(); };
+  $("theme").onclick = () => { applyTheme(document.documentElement.dataset.theme === "dark" ? "light" : "dark"); rerender(); };
   $("kiosk").onclick = () => { params.set("kiosk", "1"); location.search = params; };
-  panels = await build(await (await fetch("/dashboard.json")).json());
+  addEventListener("resize", () => items.forEach(i => i.chart?.render()));
+  items = build(await (await fetch("/dashboard.json")).json());
   setupExplore().catch(() => {});
   await refreshAll(); schedule();
 }
