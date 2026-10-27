@@ -41,6 +41,12 @@ class Store:
             while pts[0][0] < t - self.retention:
                 pts.popleft()
 
+    def prune(self, now):
+        """Drop series that have not reported within the retention period."""
+        with self.lock:
+            for k in [k for k, p in self.series.items() if not p or p[-1][0] < now - self.retention]:
+                del self.series[k]
+
     def names(self):
         """Metric names with the label keys seen on each."""
         with self.lock:
@@ -164,6 +170,7 @@ def tick(store, alerts, targets, now):
             scrape(store, t, now)
         except Exception as e:
             print(f"scrape {t} failed: {e!r}", flush=True)
+    store.prune(now)
     try:
         alerts.evaluate(store, now)
     except Exception as e:

@@ -52,6 +52,13 @@ class T(unittest.TestCase):
         s.add("b", {}, 0, 1)
         self.assertEqual(s.names(), [{"name": "a", "labels": ["x", "y"]}, {"name": "b", "labels": []}])
 
+    def test_prune_drops_silent_series(self):
+        s = Store(retention=100)
+        s.add("old", {}, 0, 1)
+        s.add("live", {}, 150, 1)
+        s.prune(150)
+        self.assertEqual([n["name"] for n in s.names()], ["live"])
+
     def test_group_by(self):
         s = Store()
         counter(s, "t", {"tool": "a"}, 0, 1)
