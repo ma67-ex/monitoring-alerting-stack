@@ -15,12 +15,19 @@ LINE = re.compile(r"^([a-zA-Z_:][\w:]*)(?:\{(.*)\})?\s+(\S+)")
 LABEL = re.compile(r'(\w+)="((?:[^"\\]|\\.)*)"')
 
 
+UNESC = re.compile(r"\\(.)")
+
+
+def _unesc(v):
+    return UNESC.sub(lambda m: "\n" if m.group(1) == "n" else m.group(1), v)
+
+
 def parse(text):
     """Yield (name, labels, value) from Prometheus text format."""
     for line in text.splitlines():
         m = LINE.match(line)
         if m:
-            yield m.group(1), dict(LABEL.findall(m.group(2) or "")), float(m.group(3))
+            yield m.group(1), {k: _unesc(v) for k, v in LABEL.findall(m.group(2) or "")}, float(m.group(3))
 
 
 class Store:

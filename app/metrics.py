@@ -6,8 +6,12 @@ _lock = threading.Lock()
 _all = []
 
 
+def _esc(v):
+    return v.replace("\\", "\\\\").replace('"', '\\"').replace("\n", "\\n")
+
+
 def _fmt(labels):
-    return "{" + ",".join(f'{k}="{v}"' for k, v in labels) + "}" if labels else ""
+    return "{" + ",".join(f'{k}="{_esc(v)}"' for k, v in labels) + "}" if labels else ""
 
 
 class Counter:
