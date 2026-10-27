@@ -1,3 +1,9 @@
+---
+title: Monitoring Alerting Stack
+sdk: docker
+app_port: 7860
+---
+
 # monitoring-alerting-stack
 
 A small monitoring system written from scratch in Python, with no third-party packages. It has three parts: a demo service that exposes metrics, a collector that scrapes and stores them and fires alerts, and a web dashboard.
