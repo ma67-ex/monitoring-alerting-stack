@@ -1,126 +1,19 @@
 {
-  "title": "Agent service",
+  "title": "agent-service",
   "panels": [
-    {
-      "type": "stat",
-      "title": "Requests / s",
-      "unit": "reqps",
-      "query": {
-        "fn": "rate",
-        "metric": "agent_requests_total",
-        "window": 30
-      }
-    },
-    {
-      "type": "stat",
-      "title": "Error rate",
-      "unit": "percent",
-      "warn": 0.02,
-      "crit": 0.05,
-      "query": {
-        "fn": "ratio",
-        "num": {
-          "fn": "rate",
-          "metric": "agent_requests_total",
-          "match": {
-            "status": "500"
-          },
-          "window": 30
-        },
-        "den": {
-          "fn": "rate",
-          "metric": "agent_requests_total",
-          "window": 30
-        }
-      }
-    },
-    {
-      "type": "stat",
-      "title": "p95 latency",
-      "unit": "seconds",
-      "warn": 0.5,
-      "crit": 1,
-      "query": {
-        "fn": "quantile",
-        "q": 0.95,
-        "metric": "agent_request_seconds_bucket",
-        "window": 30
-      }
-    },
-    {
-      "type": "stat",
-      "title": "Tokens / s",
-      "unit": "ops",
-      "query": {
-        "fn": "rate",
-        "metric": "agent_tokens_total",
-        "window": 30
-      }
-    },
-    {
-      "type": "timeseries",
-      "title": "Request rate",
-      "unit": "reqps",
-      "query": {
-        "fn": "rate",
-        "metric": "agent_requests_total",
-        "by": [
-          "status"
-        ],
-        "window": 30
-      },
-      "empty": "No requests in this range. Start the load generator."
-    },
-    {
-      "type": "timeseries",
-      "title": "Error rate",
-      "unit": "percent",
-      "crit": 0.05,
-      "query": {
-        "fn": "ratio",
-        "num": {
-          "fn": "rate",
-          "metric": "agent_requests_total",
-          "match": {
-            "status": "500"
-          },
-          "window": 30
-        },
-        "den": {
-          "fn": "rate",
-          "metric": "agent_requests_total",
-          "window": 30
-        }
-      }
-    },
-    {
-      "type": "timeseries",
-      "title": "p95 latency",
-      "unit": "seconds",
-      "crit": 1,
-      "query": {
-        "fn": "quantile",
-        "q": 0.95,
-        "metric": "agent_request_seconds_bucket",
-        "window": 30
-      }
-    },
-    {
-      "type": "timeseries",
-      "title": "Tool failures by tool",
-      "unit": "ops",
-      "query": {
-        "fn": "rate",
-        "metric": "agent_tool_calls_total",
-        "match": {
-          "outcome": "error"
-        },
-        "by": [
-          "tool"
-        ],
-        "window": 30
-      },
-      "empty": "No tool failures in this range"
-    }
+    {"title": "Requests by status", "unit": "reqps",
+     "empty": "No requests in this range. Start the load generator.",
+     "query": {"fn": "rate", "metric": "agent_requests_total", "by": ["status"], "window": 30}},
+    {"title": "Error rate", "unit": "percent", "warn": 0.02, "crit": 0.05, "alert": "HighErrorRate",
+     "query": {"fn": "ratio",
+               "num": {"fn": "rate", "metric": "agent_requests_total", "match": {"status": "500"}, "window": 30},
+               "den": {"fn": "rate", "metric": "agent_requests_total", "window": 30}}},
+    {"title": "p95 latency", "unit": "seconds", "warn": 0.5, "crit": 1, "alert": "HighLatencyP95",
+     "query": {"fn": "quantile", "q": 0.95, "metric": "agent_request_seconds_bucket", "window": 30}},
+    {"title": "Tokens per second", "unit": "ops",
+     "query": {"fn": "rate", "metric": "agent_tokens_total", "window": 30}},
+    {"title": "Tool failures by tool", "unit": "ops",
+     "empty": "No tool failures in this range",
+     "query": {"fn": "rate", "metric": "agent_tool_calls_total", "match": {"outcome": "error"}, "by": ["tool"], "window": 30}}
   ]
 }

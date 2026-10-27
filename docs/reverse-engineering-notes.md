@@ -27,7 +27,7 @@ Grafana UI: time range picker, refresh interval, thresholds, template variables,
 | Click legend to hide a series | Grafana | Built |
 | Kiosk mode (`?kiosk`) | Grafana | Built |
 | CSV export per panel | Grafana | Built |
-| Light and dark theme | Grafana | Built |
+| Light and dark theme | Grafana | Built (dark by default) |
 | Explore a metric (pick metric, function, window, group by, table) | Prometheus | Built |
 | Alert chips with how long they have been pending or firing | Prometheus alerts page | Built |
 

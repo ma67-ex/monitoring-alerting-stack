@@ -7,431 +7,399 @@
 <style>
   :root {
     color-scheme: dark;
-    --bg: oklch(0.165 0.012 255);
-    --surface: oklch(0.2 0.014 255);
-    --raised: oklch(0.245 0.016 255);
-    --line: oklch(0.3 0.016 255);
-    --text: oklch(0.95 0.005 255);
-    --muted: oklch(0.74 0.02 255);
-    --accent: oklch(0.78 0.12 230);
-    --ok: oklch(0.78 0.16 155);
-    --warn: oklch(0.83 0.15 85);
-    --crit: oklch(0.7 0.2 25);
-    --crit-bg: oklch(0.27 0.07 25);
-    --warn-bg: oklch(0.28 0.05 85);
-    --s1: oklch(0.78 0.12 230); --s2: oklch(0.83 0.15 85); --s3: oklch(0.78 0.16 155);
-    --s4: oklch(0.74 0.16 340); --s5: oklch(0.74 0.14 290); --s6: oklch(0.8 0.1 190);
-    --font: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    --bg: oklch(0.125 0.008 285);
+    --tint: oklch(0.155 0.01 285);
+    --line: oklch(0.255 0.012 285);
+    --grid: oklch(0.2 0.01 285);
+    --text: oklch(0.94 0.006 285);
+    --muted: oklch(0.7 0.018 285);
+    --accent: oklch(0.8 0.12 295);
+    --ok: oklch(0.8 0.15 160);
+    --warn: oklch(0.84 0.14 80);
+    --crit: oklch(0.7 0.19 22);
+    --on-state: oklch(0.15 0.02 285);
+    --s1: oklch(0.8 0.12 295); --s2: oklch(0.82 0.1 210); --s3: oklch(0.78 0.14 350);
+    --s4: oklch(0.84 0.12 100); --s5: oklch(0.76 0.1 250); --s6: oklch(0.8 0.1 40);
+    --sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    --mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
     --ease: cubic-bezier(0.25, 1, 0.5, 1);
   }
   :root[data-theme="light"] {
     color-scheme: light;
-    --bg: oklch(0.962 0.004 255);
-    --surface: oklch(0.995 0.002 255);
-    --raised: oklch(0.94 0.006 255);
-    --line: oklch(0.88 0.008 255);
-    --text: oklch(0.22 0.02 255);
-    --muted: oklch(0.46 0.02 255);
-    --accent: oklch(0.5 0.16 250);
-    --ok: oklch(0.5 0.14 155);
-    --warn: oklch(0.52 0.13 70);
-    --crit: oklch(0.5 0.2 25);
-    --crit-bg: oklch(0.94 0.04 25);
-    --warn-bg: oklch(0.95 0.05 85);
-    --s1: oklch(0.5 0.16 250); --s2: oklch(0.55 0.14 70); --s3: oklch(0.5 0.14 155);
-    --s4: oklch(0.52 0.18 340); --s5: oklch(0.5 0.16 290); --s6: oklch(0.5 0.1 200);
+    --bg: oklch(0.985 0 0); --tint: oklch(0.96 0.004 285); --line: oklch(0.86 0.008 285); --grid: oklch(0.92 0.005 285);
+    --text: oklch(0.2 0.015 285); --muted: oklch(0.45 0.02 285); --accent: oklch(0.45 0.18 295);
+    --ok: oklch(0.48 0.13 160); --warn: oklch(0.5 0.12 70); --crit: oklch(0.5 0.2 25); --on-state: oklch(0.99 0 0);
+    --s1: oklch(0.45 0.18 295); --s2: oklch(0.5 0.12 210); --s3: oklch(0.5 0.18 350);
+    --s4: oklch(0.5 0.12 100); --s5: oklch(0.48 0.14 250); --s6: oklch(0.52 0.14 40);
   }
   * { box-sizing: border-box; }
-  body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.45 var(--font); font-variant-numeric: tabular-nums; }
-  main { max-width: 1280px; margin: 0 auto; padding: 24px 24px 64px; }
-  button, select, input { font: inherit; color: var(--text); }
-  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  ::selection { background: var(--accent); color: var(--on-state); }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.45 var(--sans); caret-color: var(--accent); accent-color: var(--accent); }
+  .num { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+  button, select, input { font: inherit; color: inherit; }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 2px; }
+  .wrap { max-width: 1400px; margin: 0 auto; padding: 0 28px; }
 
-  /* top bar */
-  .top { display: flex; flex-wrap: wrap; gap: 16px 24px; align-items: center; justify-content: space-between; margin-bottom: 20px; }
-  h1 { font-size: 15px; font-weight: 600; margin: 0; color: var(--muted); }
-  .status { display: flex; align-items: center; gap: 10px; font-size: 20px; font-weight: 600; margin-top: 2px; }
-  .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--ok); flex: none; }
-  .status[data-s="pending"] .dot { background: var(--warn); }
-  .status[data-s="firing"] .dot { background: var(--crit); }
-  .controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
-  .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; background: var(--surface); }
-  .seg button { border: 0; background: none; padding: 7px 12px; cursor: pointer; color: var(--muted); transition: background 150ms var(--ease), color 150ms var(--ease); }
-  .seg button + button { border-left: 1px solid var(--line); }
-  .seg button:hover { background: var(--raised); color: var(--text); }
-  .seg button[aria-pressed="true"] { background: var(--raised); color: var(--text); font-weight: 600; }
-  .btn, select, input { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 7px 12px; }
-  .btn { cursor: pointer; transition: background 150ms var(--ease); }
-  .btn:hover, select:hover { background: var(--raised); }
-  .btn:disabled { opacity: .5; cursor: not-allowed; }
-  .live { color: var(--muted); font-size: 12px; display: flex; align-items: center; gap: 6px; }
-  .live i { width: 6px; height: 6px; border-radius: 50%; background: var(--ok); }
-  .live.off i { background: var(--muted); }
+  /* toolbar */
+  .bar { display: flex; flex-wrap: wrap; gap: 12px 28px; align-items: center; justify-content: space-between; padding: 14px 28px; max-width: 1400px; margin: 0 auto; }
+  .brand { font-family: var(--mono); font-size: 13px; color: var(--muted); }
+  .brand b { color: var(--text); font-weight: 600; }
+  .tools { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 20px; }
+  .tools button, .tools select { background: none; border: 0; color: var(--muted); cursor: pointer; padding: 4px 0; font-size: 13px; transition: color 150ms var(--ease); }
+  .tools button:hover, .tools select:hover { color: var(--text); }
+  .tools select { appearance: none; -webkit-appearance: none; padding-right: 0; }
+  .tools select option { background: var(--bg); color: var(--text); }
+  .range { display: flex; gap: 14px; }
+  .range button[aria-pressed="true"] { color: var(--text); box-shadow: 0 2px 0 var(--accent); }
+  .live { font-family: var(--mono); font-size: 12px; color: var(--muted); }
 
-  /* shared grouped surface: hairline-divided cells, not floating cards */
-  .group { display: grid; gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; margin-bottom: 20px; }
-  .group > * { background: var(--surface); }
-  h2 { font-size: 13px; font-weight: 600; color: var(--muted); margin: 28px 0 10px; }
+  /* status band: the one loud element */
+  .band { border-block: 1px solid var(--line); background: var(--tint); transition: background 250ms var(--ease); }
+  .band .wrap { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 20px; padding-block: 16px; }
+  .state { font-size: 28px; font-weight: 650; letter-spacing: -0.01em; display: flex; align-items: center; gap: 12px; }
+  .state::before { content: ""; width: 12px; height: 12px; background: var(--ok); flex: none; }
+  .detail { color: var(--muted); font-family: var(--mono); font-size: 13px; }
+  .band[data-s="pending"] { background: var(--warn); color: var(--on-state); }
+  .band[data-s="firing"] { background: var(--crit); color: var(--on-state); }
+  .band[data-s="pending"] .detail, .band[data-s="firing"] .detail { color: inherit; opacity: .85; }
+  .band[data-s="pending"] .state::before, .band[data-s="firing"] .state::before { background: var(--on-state); }
 
-  /* alerts */
-  .alerts { grid-template-columns: 1fr; }
-  .alert { display: grid; grid-template-columns: 14px minmax(140px, 190px) 1fr auto; gap: 12px; align-items: center; padding: 9px 16px; }
-  .alert[data-s="inactive"] .val small { display: none; }
-  .alert .dot { width: 8px; height: 8px; }
-  .alert[data-s="pending"] .dot { background: var(--warn); } .alert[data-s="firing"] .dot { background: var(--crit); }
-  .alert[data-s="firing"] { background: var(--crit-bg); } .alert[data-s="pending"] { background: var(--warn-bg); }
-  .alert b { font-weight: 600; }
-  .alert .sum { color: var(--muted); }
-  .alert .val { text-align: right; white-space: nowrap; }
-  .alert .val small { color: var(--muted); display: block; font-size: 12px; }
-  .alert[data-s="inactive"] b { font-weight: 500; }
-
-  /* signals strip */
-  .signals { grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
-  .signal { padding: 16px 18px 14px; display: grid; gap: 2px; }
-  .signal .k { color: var(--muted); font-size: 13px; display: flex; align-items: center; gap: 8px; }
-  .signal .v { font-size: 32px; font-weight: 600; line-height: 1.15; letter-spacing: -0.01em; }
-  .signal .lim { color: var(--muted); font-size: 12px; min-height: 18px; }
-  .signal[data-s="warn"] .v { color: var(--warn); } .signal[data-s="crit"] .v { color: var(--crit); }
-  .signal[data-s="warn"] .dot { background: var(--warn); } .signal[data-s="crit"] .dot { background: var(--crit); }
-  .signal .dot { width: 7px; height: 7px; }
-  .signal canvas { width: 100%; height: 32px; margin-top: 6px; display: block; }
-
-  /* charts */
-  .charts { grid-template-columns: repeat(auto-fit, minmax(min(100%, 460px), 1fr)); }
-  .chart { padding: 16px 18px 12px; position: relative; }
-  .chart header { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; margin-bottom: 8px; }
-  .chart h3 { margin: 0; font-size: 14px; font-weight: 600; }
-  .chart .now { font-size: 14px; color: var(--muted); }
-  .chart .now b { color: var(--text); font-size: 18px; font-weight: 600; margin-right: 10px; }
-  .chart canvas { width: 100%; height: 240px; display: block; }
-  .link { background: none; border: 0; color: var(--muted); cursor: pointer; font-size: 12px; padding: 2px 4px; border-radius: 4px; }
-  .link:hover { color: var(--text); text-decoration: underline; }
-  .legend { display: flex; flex-wrap: wrap; gap: 4px 14px; margin-top: 6px; min-height: 22px; font-size: 12px; }
-  .legend button { background: none; border: 0; color: var(--muted); cursor: pointer; padding: 2px 0; display: flex; align-items: center; gap: 6px; }
+  /* strip rows: flat, ruled, no containers */
+  .row { display: grid; grid-template-columns: 280px 1fr; border-bottom: 1px solid var(--line); }
+  .row[data-a="firing"] { background: color-mix(in oklch, var(--crit) 10%, var(--bg)); }
+  .row[data-a="pending"] { background: color-mix(in oklch, var(--warn) 9%, var(--bg)); }
+  .meta { padding: 16px 20px 14px 0; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+  .meta h3 { margin: 0; font-size: 13px; font-weight: 500; color: var(--muted); display: flex; justify-content: space-between; gap: 8px; }
+  .val { font-size: 30px; font-weight: 500; line-height: 1.1; letter-spacing: -0.02em; }
+  .row[data-st="warn"] .val { color: var(--warn); } .row[data-st="crit"] .val { color: var(--crit); }
+  .meter { height: 3px; background: var(--grid); position: relative; margin: 2px 0; }
+  .meter i { position: absolute; inset: 0 auto 0 0; background: var(--muted); transition: width 250ms var(--ease); }
+  .row[data-st="warn"] .meter i { background: var(--warn); } .row[data-st="crit"] .meter i { background: var(--crit); }
+  .meter u { position: absolute; top: -3px; bottom: -3px; width: 1px; background: var(--text); opacity: .7; }
+  .tag { font-family: var(--mono); font-size: 12px; color: var(--muted); min-height: 18px; }
+  .row[data-a="firing"] .tag { color: var(--crit); font-weight: 600; } .row[data-a="pending"] .tag { color: var(--warn); font-weight: 600; }
+  .legend { display: flex; flex-direction: column; gap: 1px; font-size: 12px; }
+  .legend button { display: flex; align-items: center; gap: 8px; background: none; border: 0; color: var(--muted); padding: 2px 0; cursor: pointer; text-align: left; width: 100%; }
   .legend button:hover { color: var(--text); }
-  .legend button[aria-pressed="false"] { opacity: .45; text-decoration: line-through; }
-  .legend i { width: 12px; height: 3px; border-radius: 2px; }
-
-  /* skeleton */
-  .skel { color: transparent !important; background: var(--raised); border-radius: 6px; animation: pulse 1.4s ease-in-out infinite; }
+  .legend button[aria-pressed="false"] { opacity: .4; text-decoration: line-through; }
+  .legend i { width: 10px; height: 2px; flex: none; }
+  .legend span:last-child { margin-left: auto; font-family: var(--mono); color: var(--text); }
+  .csv { background: none; border: 0; color: var(--muted); font-size: 12px; cursor: pointer; padding: 0; }
+  .csv:hover { color: var(--text); text-decoration: underline; text-underline-offset: 3px; }
+  .plot { min-width: 0; position: relative; min-height: 176px; }
+  .plot canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+  .axis { display: grid; grid-template-columns: 280px 1fr; }
+  .axis canvas { width: 100%; height: 30px; display: block; grid-column: 2; }
+  .skel { color: transparent !important; background: var(--grid); animation: pulse 1.4s ease-in-out infinite; width: 6ch; }
   @keyframes pulse { 50% { opacity: .5; } }
 
-  /* explore */
-  .explore .form { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end; padding: 16px 18px; }
-  .explore label { display: grid; gap: 4px; font-size: 12px; color: var(--muted); }
-  .explore input[type=number] { width: 90px; }
-  .explore input[type=text] { width: 220px; }
-  .explore .out { padding: 0 18px 16px; }
-  .explore table { border-collapse: collapse; width: 100%; font-size: 13px; margin-top: 10px; }
-  .explore th, .explore td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--line); }
-  .explore th { color: var(--muted); font-weight: 500; }
-  .explore .hint { color: var(--muted); padding: 4px 18px 16px; margin: 0; }
+  h2 { font-size: 13px; font-weight: 500; color: var(--muted); margin: 36px 0 8px; }
+  .rules div { display: grid; grid-template-columns: 12px 170px 1fr auto auto; gap: 14px; align-items: baseline; padding: 8px 0; border-bottom: 1px solid var(--line); font-size: 13px; }
+  .rules i { width: 7px; height: 7px; background: var(--ok); align-self: center; }
+  .rules div[data-s="pending"] i { background: var(--warn); } .rules div[data-s="firing"] i { background: var(--crit); }
+  .rules .sum { color: var(--muted); } .rules .st { color: var(--muted); width: 120px; text-align: right; }
+  .rules div[data-s="firing"] .st { color: var(--crit); } .rules div[data-s="pending"] .st { color: var(--warn); }
 
-  .kiosk .controls, .kiosk .explore-wrap { display: none; }
-  .kiosk main { max-width: none; }
-  @media (max-width: 640px) {
-    main { padding: 16px 12px 48px; }
-    .alert { grid-template-columns: 14px 1fr auto; } .alert .sum { display: none; }
-    .signal .v { font-size: 26px; }
+  .form { display: flex; flex-wrap: wrap; gap: 14px 20px; align-items: flex-end; padding-bottom: 14px; }
+  .form label { display: grid; gap: 4px; font-size: 12px; color: var(--muted); }
+  .form select, .form input { background: var(--tint); border: 1px solid var(--line); border-radius: 2px; padding: 6px 8px; min-width: 120px; }
+  .form input:hover, .form select:hover { border-color: var(--muted); }
+  .form button { background: var(--text); color: var(--bg); border: 0; border-radius: 2px; padding: 7px 16px; cursor: pointer; font-weight: 600; }
+  .form button:hover { background: var(--accent); }
+  .hint { color: var(--muted); font-size: 12px; margin-top: 28px; font-family: var(--mono); }
+  kbd { font: inherit; color: var(--text); }
+
+  .kiosk .bar, .kiosk .explore, .kiosk .hint { display: none; }
+  .kiosk .wrap { max-width: none; }
+  @media (max-width: 760px) {
+    .wrap { padding: 0 16px; } .bar { padding: 12px 16px; }
+    .row, .axis { grid-template-columns: 1fr; } .axis canvas { grid-column: 1; }
+    .meta { padding-right: 0; } .plot { min-height: 130px; }
+    .rules div { grid-template-columns: 12px 1fr auto; } .rules .sum, .rules .st { display: none; }
+    .state { font-size: 22px; }
   }
   @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
 </style>
 </head>
 <body>
-<main>
-  <div class="top">
-    <div>
-      <h1 id="title">Dashboard</h1>
-      <div class="status" id="status" data-s="inactive"><span class="dot"></span><span id="status-text">Checking…</span></div>
+<div class="bar">
+  <div class="brand"><b id="title">agent-service</b> / collector :9090</div>
+  <div class="tools">
+    <span class="live" id="live">loading</span>
+    <div class="range" role="group" aria-label="Time range" id="range">
+      <button data-v="300" aria-pressed="true">5m</button><button data-v="900" aria-pressed="false">15m</button><button data-v="3600" aria-pressed="false">1h</button>
     </div>
-    <div class="controls">
-      <span class="live off" id="live"><i></i><span id="live-text">Loading</span></span>
-      <div class="seg" role="group" aria-label="Time range" id="range">
-        <button data-v="300" aria-pressed="true">5m</button><button data-v="900" aria-pressed="false">15m</button><button data-v="3600" aria-pressed="false">1h</button>
-      </div>
-      <label class="visually"><select id="refresh" aria-label="Refresh interval">
-        <option value="0">Refresh: off</option><option value="5">Refresh: 5 s</option><option value="15">Refresh: 15 s</option><option value="60">Refresh: 1 min</option></select></label>
-      <button class="btn" id="now">Refresh now</button>
-      <button class="btn" id="theme" aria-label="Toggle light or dark theme">Theme</button>
-      <button class="btn" id="kiosk">Kiosk</button>
+    <select id="refresh" aria-label="Refresh interval">
+      <option value="0">refresh off</option><option value="5">refresh 5s</option><option value="15">refresh 15s</option><option value="60">refresh 1m</option></select>
+    <button id="now">Refresh</button>
+    <button id="theme" aria-label="Toggle light or dark theme">Theme</button>
+    <button id="kiosk">Kiosk</button>
+  </div>
+</div>
+
+<div class="band" id="band" data-s="inactive">
+  <div class="wrap"><span class="state" id="state">Checking</span><span class="detail" id="detail"></span></div>
+</div>
+
+<main class="wrap">
+  <div id="rows"></div>
+  <div class="axis"><canvas id="axis"></canvas></div>
+
+  <h2>Alert rules</h2>
+  <div class="rules" id="rules"></div>
+
+  <div class="explore">
+    <h2>Ad hoc query</h2>
+    <div class="form">
+      <label>Metric <select id="x-metric"></select></label>
+      <label>Function <select id="x-fn"><option value="rate">rate per second</option><option value="last">last value</option><option value="quantile">p95 of histogram</option></select></label>
+      <label>Window (s) <input id="x-window" class="num" type="number" value="30" min="5" style="min-width:90px;width:90px"></label>
+      <label>Group by <input id="x-by" type="text" placeholder="status, tool"></label>
+      <button id="x-run">Run</button>
     </div>
+    <div id="x-rows"></div>
   </div>
 
-  <div class="group signals" id="signals" aria-label="Current values"></div>
-  <div class="group alerts" id="alerts" aria-label="Alerts"></div>
-  <div class="group charts" id="charts"></div>
-
-  <div class="explore-wrap">
-    <h2>Explore</h2>
-    <div class="group explore">
-      <div class="form">
-        <label>Metric <select id="x-metric"></select></label>
-        <label>Function <select id="x-fn"><option value="rate">rate (per second)</option><option value="last">last value</option><option value="quantile">p95 (histogram)</option></select></label>
-        <label>Window (s) <input id="x-window" type="number" value="30" min="5"></label>
-        <label>Group by <input id="x-by" type="text" placeholder="e.g. status, tool"></label>
-        <button class="btn" id="x-run">Run</button>
-      </div>
-      <p class="hint" id="x-hint">Pick a collected metric and run it. For histograms, choose the <code>_bucket</code> metric and p95.</p>
-      <div class="out" id="x-out" hidden>
-        <div class="chart" style="padding:0"><canvas style="height:220px"></canvas><div class="legend"></div></div>
-        <table></table>
-      </div>
-    </div>
-  </div>
+  <p class="hint"><kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd> range &nbsp; <kbd>r</kbd> refresh &nbsp; <kbd>t</kbd> theme &nbsp; <kbd>k</kbd> kiosk &nbsp; hover any chart to read all rows at that time</p>
 </main>
 <script>
 const $ = id => document.getElementById(id);
 const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
-const series = i => css(`--s${(i % 6) + 1}`);
+const color = i => css(`--s${(i % 6) + 1}`);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const label = l => Object.entries(l).map(([k, v]) => `${k}=${v}`).join(", ") || "total";
 const store = { get: k => { try { return localStorage.getItem(k); } catch { return null; } },
                 set: (k, v) => { try { localStorage.setItem(k, v); } catch {} } };
 const params = new URLSearchParams(location.search);
 const state = { range: +(params.get("range") || 300), refresh: +(params.get("refresh") ?? 5) };
+const win = { t0: 0, t1: 1 };
+const hover = { t: null };
+const PAD = { l: 12, r: 12, t: 22, b: 8 };
 
 const UNITS = {
   reqps:   v => v.toFixed(2) + " req/s",
   percent: v => (v * 100).toFixed(1) + "%",
   seconds: v => v < 1 ? (v * 1000).toFixed(0) + " ms" : v.toFixed(2) + " s",
-  ops:     v => v.toFixed(2) + " /s",
+  ops:     v => v >= 100 ? v.toFixed(0) + " /s" : v.toFixed(2) + " /s",
   up:      v => v >= 1 ? "up" : "down",
 };
 const fmtFor = u => UNITS[u] || (v => (Math.abs(v) >= 100 ? v.toFixed(0) : v.toPrecision(3)));
 const dur = s => s < 60 ? `${Math.round(s)}s` : `${Math.floor(s / 60)}m ${Math.round(s % 60)}s`;
+const clock = (t, long) => new Date(t * 1000).toLocaleTimeString([], long ? { hour: "2-digit", minute: "2-digit", second: "2-digit" } : { hour: "2-digit", minute: "2-digit" });
 
-async function query(spec) {
-  const step = Math.max(5, Math.round(state.range / 90));
-  const url = `/api/query_range?span=${state.range}&step=${step}&spec=${encodeURIComponent(JSON.stringify(spec))}`;
-  const r = await fetch(url);
-  if (!r.ok) throw new Error(r.status);
-  return r.json();
-}
-
-/* ---- axis helpers ---- */
 function niceMax(v) {
   if (v <= 0) return 1;
   const p = 10 ** Math.floor(Math.log10(v)), f = v / p;
   return (f <= 1 ? 1 : f <= 2 ? 2 : f <= 2.5 ? 2.5 : f <= 5 ? 5 : 10) * p;
 }
-const timeLabel = (t, span) => new Date(t * 1000).toLocaleTimeString([], span > 600 ? { hour: "2-digit", minute: "2-digit" } : { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+const nearest = (pts, t) => pts.reduce((a, b) => Math.abs(b[0] - t) < Math.abs(a[0] - t) ? b : a);
+const tickCount = w => Math.max(2, Math.min(8, Math.floor(w / 130)));
 
-class Chart {
-  constructor(canvas, fmt, opts = {}) {
-    Object.assign(this, { canvas, fmt, crit: opts.crit, empty: opts.empty, series: [], hidden: new Set(), hover: null });
-    canvas.addEventListener("mousemove", e => { this.hover = e.offsetX; this.render(); });
-    canvas.addEventListener("mouseleave", () => { this.hover = null; this.render(); });
-  }
-  setData(s) { this.series = s; this.render(); }
-  render() {
-    const { canvas, fmt } = this, dpr = devicePixelRatio || 1, w = canvas.clientWidth, h = canvas.clientHeight;
-    if (!w) return;
-    canvas.width = w * dpr; canvas.height = h * dpr;
-    const c = canvas.getContext("2d"); c.scale(dpr, dpr);
-    const pad = { l: 72, r: 14, t: 10, b: 28 }, span = state.range, t1 = Date.now() / 1000, t0 = t1 - span;
-    const shown = this.series.filter((_, i) => !this.hidden.has(i));
-    const peak = Math.max(0, ...shown.flatMap(s => s.points.map(p => p[1])));
-    const top = niceMax(Math.max(peak, this.crit ? this.crit * 1.1 : 0));
-    c.font = `12px ${css("--font")}`;
-    pad.l = Math.ceil(Math.max(...[0, 1, 2, 3, 4].map(i => c.measureText(fmt(top * i / 4)).width))) + 20;
-    const X = t => pad.l + (t - t0) / span * (w - pad.l - pad.r), Y = v => h - pad.b - v / top * (h - pad.t - pad.b);
-    const line = css("--line"), muted = css("--muted");
-    c.font = `12px ${css("--font")}`; c.lineWidth = 1;
-    for (let i = 0; i <= 4; i++) {
-      const v = top * i / 4, y = Math.round(Y(v)) + 0.5;
-      c.strokeStyle = line; c.beginPath(); c.moveTo(pad.l, y); c.lineTo(w - pad.r, y); c.stroke();
-      c.fillStyle = muted; c.textAlign = "right"; c.fillText(fmt(v), pad.l - 10, y + 4);
-    }
-    const ticks = Math.max(2, Math.min(6, Math.floor((w - pad.l - pad.r) / (span > 600 ? 90 : 120))));
-    c.textAlign = "center"; c.fillStyle = muted;
-    for (let i = 0; i <= ticks; i++) {
-      const t = t0 + span * i / ticks;
-      c.textAlign = i === 0 ? "left" : i === ticks ? "right" : "center";
-      c.fillText(timeLabel(t, span), X(t) + (i === 0 ? -4 : i === ticks ? 4 : 0), h - 8);
-    }
-    if (this.crit) {
-      c.strokeStyle = css("--crit"); c.setLineDash([6, 5]); c.lineWidth = 1.25; c.beginPath();
-      c.moveTo(pad.l, Y(this.crit)); c.lineTo(w - pad.r, Y(this.crit)); c.stroke(); c.setLineDash([]);
-      c.fillStyle = css("--crit"); c.textAlign = "right"; c.fillText(`limit ${fmt(this.crit)}`, w - pad.r, Y(this.crit) - 6);
-    }
-    if (!this.series.length) {
-      c.fillStyle = muted; c.textAlign = "center"; c.font = `13px ${css("--font")}`;
-      c.fillText(this.empty || "No data in this range", (pad.l + w - pad.r) / 2, (pad.t + h - pad.b) / 2);
-      return;
-    }
-    this.series.forEach((s, i) => {
-      if (this.hidden.has(i) || !s.points.length) return;
-      const col = series(i);
-      c.beginPath();
-      s.points.forEach(([t, v], j) => j ? c.lineTo(X(t), Y(v)) : c.moveTo(X(t), Y(v)));
-      c.strokeStyle = col; c.lineWidth = 2; c.lineJoin = "round"; c.stroke();
-      if (this.series.length === 1) {
-        c.lineTo(X(s.points.at(-1)[0]), Y(0)); c.lineTo(X(s.points[0][0]), Y(0)); c.closePath();
-        c.globalAlpha = 0.12; c.fillStyle = col; c.fill(); c.globalAlpha = 1;
-      }
-      const [lt, lv] = s.points.at(-1);
-      c.fillStyle = col; c.beginPath(); c.arc(X(lt), Y(lv), 3.5, 0, 7); c.fill();
-    });
-    if (this.hover !== null && this.hover > pad.l && this.hover < w - pad.r) this.tooltip(c, X, Y, t0, span, pad, w, h);
-  }
-  tooltip(c, X, Y, t0, span, pad, w, h) {
-    const t = t0 + (this.hover - pad.l) / (w - pad.l - pad.r) * span, rows = [];
-    this.series.forEach((s, i) => {
-      if (this.hidden.has(i) || !s.points.length) return;
-      const p = s.points.reduce((a, b) => Math.abs(b[0] - t) < Math.abs(a[0] - t) ? b : a);
-      rows.push({ text: `${label(s.labels)}  ${this.fmt(p[1])}`, color: series(i), x: X(p[0]), y: Y(p[1]) });
-    });
-    if (!rows.length) return;
-    c.strokeStyle = css("--muted"); c.lineWidth = 1; c.globalAlpha = 0.6;
-    c.beginPath(); c.moveTo(this.hover + 0.5, pad.t); c.lineTo(this.hover + 0.5, h - pad.b); c.stroke(); c.globalAlpha = 1;
-    rows.forEach(r => { c.fillStyle = css("--surface"); c.beginPath(); c.arc(r.x, r.y, 5, 0, 7); c.fill(); c.fillStyle = r.color; c.beginPath(); c.arc(r.x, r.y, 3.5, 0, 7); c.fill(); });
-    c.font = `12px ${css("--font")}`;
-    const head = new Date(t * 1000).toLocaleTimeString(), lines = [head, ...rows.map(r => r.text)];
-    const bw = Math.max(...lines.map(l => c.measureText(l).width)) + 28, bh = lines.length * 18 + 12;
-    const bx = this.hover + 14 + bw > w ? this.hover - bw - 14 : this.hover + 14, by = pad.t + 4;
-    c.fillStyle = css("--raised"); c.strokeStyle = css("--line");
-    c.beginPath(); c.roundRect(bx, by, bw, bh, 6); c.fill(); c.stroke();
-    c.textAlign = "left";
-    lines.forEach((l, i) => {
-      c.fillStyle = i ? css("--text") : css("--muted"); c.fillText(l, bx + (i ? 20 : 10), by + 20 + i * 18);
-      if (i) { c.fillStyle = rows[i - 1].color; c.fillRect(bx + 10, by + 14 + i * 18, 6, 6); }
-    });
-  }
-}
-
-function spark(canvas, pts, color) {
+function prep(canvas) {
   const dpr = devicePixelRatio || 1, w = canvas.clientWidth, h = canvas.clientHeight;
-  if (!w) return;
+  if (!w || !h) return null;
   canvas.width = w * dpr; canvas.height = h * dpr;
   const c = canvas.getContext("2d"); c.scale(dpr, dpr);
-  if (pts.length < 2) return;
-  const max = Math.max(...pts.map(p => p[1]), 1e-9), min = Math.min(...pts.map(p => p[1]), 0);
-  const X = i => i / (pts.length - 1) * (w - 2) + 1, Y = v => h - 3 - (v - min) / (max - min || 1) * (h - 6);
-  c.beginPath(); pts.forEach((p, i) => i ? c.lineTo(X(i), Y(p[1])) : c.moveTo(X(i), Y(p[1])));
-  c.strokeStyle = color; c.lineWidth = 1.5; c.lineJoin = "round"; c.stroke();
+  return { c, w, h };
+}
+const xOf = (t, w) => PAD.l + (t - win.t0) / (win.t1 - win.t0) * (w - PAD.l - PAD.r);
+const tOf = (x, w) => win.t0 + (x - PAD.l) / (w - PAD.l - PAD.r) * (win.t1 - win.t0);
+
+function bindHover(canvas) {
+  canvas.addEventListener("mousemove", e => { hover.t = tOf(e.offsetX, canvas.clientWidth); renderAll(); });
+  canvas.addEventListener("mouseleave", () => { hover.t = null; renderAll(); });
 }
 
-const total = series => {
-  const sum = new Map();
-  series.forEach(s => s.points.forEach(([t, v]) => sum.set(t, (sum.get(t) || 0) + v)));
-  return [...sum].sort((a, b) => a[0] - b[0]);
-};
+/* ---- one metric: label column + plot ---- */
+class Row {
+  constructor(host, p) {
+    Object.assign(this, { p, fmt: p.fmtOverride || fmtFor(p.unit), series: [], hidden: new Set() });
+    this.el = document.createElement("section"); this.el.className = "row";
+    this.el.innerHTML = `<div class="meta"><h3><span>${esc(p.title)}</span><button class="csv">CSV</button></h3>` +
+      `<div class="val num skel">0</div>${p.crit !== undefined ? '<div class="meter"><i></i><u></u></div>' : ""}` +
+      `<div class="tag"></div><div class="legend"></div></div><div class="plot"><canvas></canvas></div>`;
+    host.appendChild(this.el);
+    this.canvas = this.el.querySelector("canvas");
+    this.val = this.el.querySelector(".val"); this.tag = this.el.querySelector(".tag"); this.lg = this.el.querySelector(".legend");
+    this.fill = this.el.querySelector(".meter i"); this.tick = this.el.querySelector(".meter u");
+    this.max = p.crit !== undefined ? p.crit * 1.5 : null;
+    if (this.tick) this.tick.style.left = (p.crit / this.max * 100) + "%";
+    this.el.querySelector(".csv").onclick = () => download(`${p.title}.csv`, csv(this.series));
+    this.lg.onclick = e => {
+      const b = e.target.closest("button"); if (!b) return;
+      const i = +b.dataset.i; this.hidden.has(i) ? this.hidden.delete(i) : this.hidden.add(i);
+      this.refreshMeta(); this.render();
+    };
+    bindHover(this.canvas);
+  }
+  setData(series) { this.series = series; this.hidden.clear(); this.refreshMeta(); this.render(); }
+  valueAt(pts) { return hover.t === null ? pts.at(-1)?.[1] : nearest(pts, hover.t)[1]; }
+  refreshMeta() {
+    const live = this.series.map((s, i) => ({ s, i })).filter(({ s, i }) => s.points.length && !this.hidden.has(i));
+    const vals = live.map(({ s }) => this.valueAt(s.points));
+    const total = vals.length ? vals.reduce((a, b) => a + b, 0) : undefined;
+    this.val.classList.remove("skel");
+    this.val.textContent = total === undefined ? "no data" : this.fmt(total);
+    const st = total === undefined ? "" : this.p.crit !== undefined && total >= this.p.crit ? "crit" : this.p.warn !== undefined && total >= this.p.warn ? "warn" : "";
+    this.el.dataset.st = st;
+    if (this.fill) this.fill.style.width = total === undefined ? "0" : Math.min(100, total / this.max * 100) + "%";
+    const many = this.series.length > 1 || Object.keys(this.series[0]?.labels || {}).length;
+    this.lg.innerHTML = many ? this.series.map((s, i) => {
+      const v = s.points.length ? this.fmt(this.valueAt(s.points)) : "";
+      return `<button data-i="${i}" aria-pressed="${!this.hidden.has(i)}"><i style="background:${color(i)}"></i><span>${esc(label(s.labels))}</span><span>${v}</span></button>`;
+    }).join("") : "";
+  }
+  render() {
+    const g = prep(this.canvas); if (!g) return;
+    const { c, w, h } = g, p = this.p, fmt = this.fmt;
+    const shown = this.series.filter((_, i) => !this.hidden.has(i));
+    const peak = Math.max(0, ...shown.flatMap(s => s.points.map(q => q[1])));
+    const top = niceMax(Math.max(peak, p.crit ? p.crit * 1.15 : 0));
+    const Y = v => h - PAD.b - v / top * (h - PAD.t - PAD.b);
+    c.font = `12px ${css("--mono")}`; c.lineWidth = 1;
+    const n = tickCount(w);
+    c.strokeStyle = css("--grid");
+    for (let i = 0; i <= n; i++) { const x = Math.round(xOf(win.t0 + (win.t1 - win.t0) * i / n, w)) + 0.5; c.beginPath(); c.moveTo(x, 0); c.lineTo(x, h); c.stroke(); }
+    [0, 0.5, 1].forEach(f => { const y = Math.round(Y(top * f)) + 0.5; c.beginPath(); c.moveTo(0, y); c.lineTo(w, y); c.stroke(); });
+    c.fillStyle = css("--muted"); c.textAlign = "left"; c.fillText(fmt(top), PAD.l + 4, 14);
+    if (p.crit) {
+      const y = Y(p.crit); c.strokeStyle = css("--crit"); c.setLineDash([5, 4]); c.beginPath(); c.moveTo(0, y); c.lineTo(w, y); c.stroke(); c.setLineDash([]);
+      c.fillStyle = css("--crit"); c.textAlign = "right"; c.fillText(`limit ${fmt(p.crit)}`, w - PAD.r - 2, y - 5);
+    }
+    if (!this.series.length) {
+      c.fillStyle = css("--muted"); c.textAlign = "center"; c.font = `13px ${css("--sans")}`;
+      c.fillText(p.empty || "No data in this range", w / 2, h / 2 + 4); return;
+    }
+    this.series.forEach((s, i) => {
+      if (this.hidden.has(i) || !s.points.length) return;
+      const col = color(i); c.beginPath();
+      s.points.forEach(([t, v], j) => j ? c.lineTo(xOf(t, w), Y(v)) : c.moveTo(xOf(t, w), Y(v)));
+      c.strokeStyle = col; c.lineWidth = 1.75; c.lineJoin = "round"; c.stroke();
+      if (this.series.length === 1) {
+        c.lineTo(xOf(s.points.at(-1)[0], w), Y(0)); c.lineTo(xOf(s.points[0][0], w), Y(0)); c.closePath();
+        c.globalAlpha = 0.1; c.fillStyle = col; c.fill(); c.globalAlpha = 1;
+      }
+      const [lt, lv] = s.points.at(-1); c.fillStyle = col; c.beginPath(); c.arc(xOf(lt, w), Y(lv), 3, 0, 7); c.fill();
+    });
+    if (hover.t !== null) {
+      const x = xOf(hover.t, w); c.strokeStyle = css("--text"); c.globalAlpha = 0.55; c.lineWidth = 1;
+      c.beginPath(); c.moveTo(Math.round(x) + 0.5, 0); c.lineTo(Math.round(x) + 0.5, h); c.stroke(); c.globalAlpha = 1;
+      this.series.forEach((s, i) => {
+        if (this.hidden.has(i) || !s.points.length) return;
+        const [t, v] = nearest(s.points, hover.t);
+        c.fillStyle = css("--bg"); c.beginPath(); c.arc(xOf(t, w), Y(v), 5, 0, 7); c.fill();
+        c.fillStyle = color(i); c.beginPath(); c.arc(xOf(t, w), Y(v), 3.5, 0, 7); c.fill();
+      });
+    }
+  }
+}
+
+const rows = [], xrows = [];
+function renderAll() { [...rows, ...xrows].forEach(r => { r.refreshMeta(); r.render(); }); renderAxis(); }
+
+function renderAxis() {
+  const canvas = $("axis"), g = prep(canvas); if (!g) return;
+  const { c, w } = g, n = tickCount(w), long = win.t1 - win.t0 <= 600;
+  c.font = `12px ${css("--mono")}`; c.fillStyle = css("--muted");
+  for (let i = 0; i <= n; i++) {
+    const t = win.t0 + (win.t1 - win.t0) * i / n;
+    c.textAlign = i === 0 ? "left" : i === n ? "right" : "center";
+    c.fillText(clock(t, long), xOf(t, w) + (i === 0 ? -PAD.l + 2 : i === n ? PAD.r - 2 : 0), 20);
+  }
+  if (hover.t !== null) {
+    const txt = clock(hover.t, true), tw = c.measureText(txt).width + 14, x = Math.min(w - tw, Math.max(0, xOf(hover.t, w) - tw / 2));
+    c.fillStyle = css("--text"); c.fillRect(x, 4, tw, 22);
+    c.fillStyle = css("--bg"); c.textAlign = "left"; c.fillText(txt, x + 7, 20);
+  }
+}
+bindHover($("axis"));
 
 function csv(s) {
-  const rows = ["time,series,value"];
-  s.forEach(x => x.points.forEach(([t, v]) => rows.push(`${new Date(t * 1000).toISOString()},"${label(x.labels).replace(/"/g, '""')}",${v}`)));
-  return rows.join("\n");
+  const out = ["time,series,value"];
+  s.forEach(x => x.points.forEach(([t, v]) => out.push(`${new Date(t * 1000).toISOString()},"${label(x.labels).replace(/"/g, '""')}",${v}`)));
+  return out.join("\n");
 }
 function download(name, text) {
   const a = document.createElement("a");
   a.href = URL.createObjectURL(new Blob([text], { type: "text/csv" })); a.download = name; a.click(); URL.revokeObjectURL(a.href);
 }
 
-function legend(el, chart) {
-  const s = chart.series;
-  const worth = s.length > 1 || Object.keys(s[0]?.labels || {}).length;
-  el.innerHTML = worth ? s.map((x, i) =>
-    `<button data-i="${i}" aria-pressed="${!chart.hidden.has(i)}"><i style="background:${series(i)}"></i>${esc(label(x.labels))}</button>`).join("") : "";
-  el.onclick = e => {
-    const b = e.target.closest("button"); if (!b) return;
-    const i = +b.dataset.i; chart.hidden.has(i) ? chart.hidden.delete(i) : chart.hidden.add(i);
-    legend(el, chart); chart.render();
-  };
+async function query(spec) {
+  const step = Math.max(5, Math.round(state.range / 120));
+  const r = await fetch(`/api/query_range?span=${state.range}&end=${win.t1}&step=${step}&spec=${encodeURIComponent(JSON.stringify(spec))}`);
+  if (!r.ok) throw new Error(r.status);
+  return r.json();
 }
 
-/* ---- build ---- */
-function build(dash) {
-  $("title").textContent = dash.title; document.title = dash.title;
-  const items = [];
-  for (const p of dash.panels) {
-    const fmt = fmtFor(p.unit);
-    if (p.type === "stat") {
-      const el = document.createElement("div"); el.className = "signal";
-      el.innerHTML = `<span class="k"><span class="dot"></span>${esc(p.title)}</span><span class="v skel">0000</span><span class="lim"></span><canvas></canvas>`;
-      $("signals").appendChild(el);
-      const v = el.querySelector(".v"), lim = el.querySelector(".lim"), cv = el.querySelector("canvas");
-      lim.textContent = p.crit !== undefined ? `limit ${fmt(p.crit)}` : p.warn !== undefined ? `warn at ${fmt(p.warn)}` : "";
-      items.push({ async refresh() {
-        const pts = total(await query(p.query)), last = pts.at(-1)?.[1];
-        v.classList.remove("skel");
-        v.textContent = last === undefined ? "no data" : fmt(last);
-        el.dataset.s = last === undefined ? "" : p.crit !== undefined && last >= p.crit ? "crit" : p.warn !== undefined && last >= p.warn ? "warn" : "";
-        spark(cv, pts, css("--accent"));
-      } });
-    } else {
-      const el = document.createElement("section"); el.className = "chart";
-      el.innerHTML = `<header><h3>${esc(p.title)}</h3><span class="now"><b class="skel">0000</b><button class="link">Download CSV</button></span></header><canvas></canvas><div class="legend"></div>`;
-      $("charts").appendChild(el);
-      const chart = new Chart(el.querySelector("canvas"), fmt, { crit: p.crit, empty: p.empty });
-      const now = el.querySelector("b"), lg = el.querySelector(".legend");
-      el.querySelector(".link").onclick = () => download(`${p.title}.csv`, csv(chart.series));
-      items.push({ chart, async refresh() {
-        const s = await query(p.query); chart.setData(s); legend(lg, chart);
-        const last = total(s).at(-1)?.[1];
-        now.classList.remove("skel"); now.textContent = last === undefined ? "no data" : fmt(last);
-      } });
-    }
-  }
-  return items;
-}
-
-async function refreshAlerts() {
-  const alerts = await (await fetch("/api/alerts")).json(), now = Date.now() / 1000;
-  $("alerts").innerHTML = alerts.map(a => {
-    const fmt = fmtFor(a.unit), val = a.value === null ? "no data" : fmt(a.value);
-    const since = a.since && a.state !== "inactive" ? `${a.state} for ${dur(now - a.since)}` : "";
-    return `<div class="alert" data-s="${a.state}"><span class="dot"></span><b>${esc(a.alert)}</b><span class="sum">${esc(a.summary)}</span>` +
-           `<span class="val">${esc(val)}<small>${since || (a.unit === "up" ? "fires when down" : `limit ${esc(a.op)} ${esc(fmt(a.threshold))}`)}</small></span></div>`;
+function applyAlerts(alerts, now) {
+  const by = Object.fromEntries(alerts.map(a => [a.alert, a]));
+  rows.forEach(r => {
+    const a = by[r.p.alert]; if (!a) return;
+    r.el.dataset.a = a.state;
+    const fmt = fmtFor(a.unit);
+    r.tag.textContent = a.state === "inactive" ? `${a.alert} ok  limit ${a.op} ${fmt(a.threshold)}` : `${a.alert.toUpperCase()} ${a.state} ${dur(now - a.since)}`;
+  });
+  const bad = alerts.filter(a => a.state !== "inactive"), firing = alerts.filter(a => a.state === "firing");
+  $("band").dataset.s = firing.length ? "firing" : bad.length ? "pending" : "inactive";
+  $("state").textContent = firing.length ? "Firing" : bad.length ? "Pending" : "Nominal";
+  $("detail").textContent = bad.length
+    ? bad.map(a => `${a.alert} ${dur(now - a.since)}`).join("  ·  ")
+    : `${alerts.length} rules inactive  ·  target ${alerts.find(a => a.unit === "up")?.value >= 1 ? "up" : "down"}`;
+  $("rules").innerHTML = alerts.map(a => {
+    const fmt = fmtFor(a.unit), v = a.value === null ? "no data" : fmt(a.value);
+    return `<div data-s="${a.state}"><i></i><b>${esc(a.alert)}</b><span class="sum">${esc(a.summary)}</span><span class="num">${esc(v)}</span>` +
+           `<span class="st num">${a.state === "inactive" ? "inactive" : `${a.state} ${dur(now - a.since)}`}</span></div>`;
   }).join("");
-  const firing = alerts.filter(a => a.state === "firing").length, pending = alerts.filter(a => a.state === "pending").length;
-  const s = firing ? "firing" : pending ? "pending" : "inactive";
-  $("status").dataset.s = s;
-  $("status-text").textContent = firing ? `${firing} alert${firing > 1 ? "s" : ""} firing` : pending ? `${pending} pending` : "All systems normal";
 }
 
-let items = [], timer = null;
+let timer = null;
 async function refreshAll() {
-  $("live-text").textContent = "Updating…";
-  const results = await Promise.allSettled([...items.map(i => i.refresh()), refreshAlerts()]);
-  const failed = results.some(r => r.status === "rejected");
-  $("live").classList.toggle("off", failed || !state.refresh);
-  $("live-text").textContent = failed ? "Collector unreachable" : `Updated ${new Date().toLocaleTimeString()}`;
+  $("live").textContent = "updating";
+  win.t1 = Date.now() / 1000; win.t0 = win.t1 - state.range;
+  const jobs = rows.map(async r => r.setData(await query(r.p.query)));
+  jobs.push((async () => applyAlerts(await (await fetch("/api/alerts")).json(), win.t1))());
+  const res = await Promise.allSettled(jobs);
+  renderAxis();
+  $("live").textContent = res.some(r => r.status === "rejected") ? "collector unreachable" : (state.refresh ? "live " : "paused ") + clock(win.t1, true);
 }
 function schedule() { clearInterval(timer); if (state.refresh) timer = setInterval(refreshAll, state.refresh * 1000); }
 const syncUrl = () => history.replaceState(null, "", "?" + params);
+function setRange(v) { state.range = v; [...$("range").children].forEach(b => b.setAttribute("aria-pressed", +b.dataset.v === v)); params.set("range", v); syncUrl(); }
+function setRefresh(v) { state.refresh = v; $("refresh").value = v; params.set("refresh", v); syncUrl(); schedule(); }
+function applyTheme(t) { document.documentElement.dataset.theme = t; store.set("theme", t); }
+const toggleTheme = () => { applyTheme(document.documentElement.dataset.theme === "dark" ? "light" : "dark"); renderAll(); };
+const kiosk = () => { params.set("kiosk", "1"); location.search = params; };
 
-async function setupExplore() {
-  const metrics = await (await fetch("/api/metrics")).json();
+function setupExplore(metrics) {
   $("x-metric").innerHTML = metrics.map(m => `<option>${esc(m.name)}</option>`).join("");
-  const chart = new Chart($("x-out").querySelector("canvas"), v => v.toPrecision(3), {});
+  let row = null;
   $("x-run").onclick = async () => {
     const fn = $("x-fn").value, metric = $("x-metric").value, window = +$("x-window").value || 30;
     const by = $("x-by").value.split(",").map(s => s.trim()).filter(Boolean);
-    const s = await query(fn === "quantile" ? { fn, q: 0.95, metric, window } : { fn, metric, window, by });
-    $("x-hint").hidden = true; $("x-out").hidden = false; chart.hidden.clear(); chart.setData(s); legend($("x-out").querySelector(".legend"), chart);
-    $("x-out").querySelector("table").innerHTML = "<tr><th>Series</th><th>Latest</th></tr>" +
-      s.map(x => `<tr><td>${esc(label(x.labels))}</td><td>${x.points.length ? x.points.at(-1)[1].toPrecision(4) : ""}</td></tr>`).join("");
+    if (!row) { row = new Row($("x-rows"), { title: "Result", fmtOverride: v => v.toPrecision(3), empty: "Query returned no series" }); xrows.push(row); }
+    row.setData(await query(fn === "quantile" ? { fn, q: 0.95, metric, window } : { fn, metric, window, by }));
   };
 }
 
-function applyTheme(t) { document.documentElement.dataset.theme = t; store.set("theme", t); }
-function rerender() { items.forEach(i => i.chart?.render()); refreshAll(); }
+addEventListener("keydown", e => {
+  if (e.metaKey || e.ctrlKey || e.altKey || /INPUT|SELECT|TEXTAREA/.test(document.activeElement?.tagName)) return;
+  const k = e.key;
+  if (k === "1" || k === "2" || k === "3") { setRange([300, 900, 3600][+k - 1]); refreshAll(); }
+  else if (k === "r") refreshAll(); else if (k === "t") toggleTheme(); else if (k === "k") kiosk();
+});
+addEventListener("resize", renderAll);
 
 async function main() {
-  applyTheme(store.get("theme") || (matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark"));
+  applyTheme(store.get("theme") || "dark");
   if (params.has("kiosk")) document.body.classList.add("kiosk");
-  $("refresh").value = state.refresh;
-  const setRange = v => { state.range = v; [...$("range").children].forEach(b => b.setAttribute("aria-pressed", +b.dataset.v === v)); };
-  setRange(state.range);
-  $("range").onclick = e => { const b = e.target.closest("button"); if (!b) return; setRange(+b.dataset.v); params.set("range", state.range); syncUrl(); refreshAll(); };
-  $("refresh").onchange = e => { state.refresh = +e.target.value; params.set("refresh", state.refresh); syncUrl(); schedule(); refreshAll(); };
-  $("now").onclick = refreshAll;
-  $("theme").onclick = () => { applyTheme(document.documentElement.dataset.theme === "dark" ? "light" : "dark"); rerender(); };
-  $("kiosk").onclick = () => { params.set("kiosk", "1"); location.search = params; };
-  addEventListener("resize", () => items.forEach(i => i.chart?.render()));
-  items = build(await (await fetch("/dashboard.json")).json());
-  setupExplore().catch(() => {});
+  setRange(state.range); $("refresh").value = state.refresh;
+  $("range").onclick = e => { const b = e.target.closest("button"); if (b) { setRange(+b.dataset.v); refreshAll(); } };
+  $("refresh").onchange = e => setRefresh(+e.target.value);
+  $("now").onclick = refreshAll; $("theme").onclick = toggleTheme; $("kiosk").onclick = kiosk;
+  const dash = await (await fetch("/dashboard.json")).json();
+  $("title").textContent = dash.title; document.title = dash.title;
+  dash.panels.forEach(p => rows.push(new Row($("rows"), p)));
+  fetch("/api/metrics").then(r => r.json()).then(setupExplore).catch(() => {});
   await refreshAll(); schedule();
 }
 main();

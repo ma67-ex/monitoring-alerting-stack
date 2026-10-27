@@ -36,12 +36,14 @@ python3 -m unittest discover -s tests
 
 ## Dashboard features
 
-- Overall status at the top ("All systems normal" or "2 alerts firing"), with how long each alert has been pending or firing.
-- A row of current values with sparklines. Each turns amber or red at its threshold.
-- Four charts with limit lines, a hover tooltip, click-to-hide legend, and CSV download.
+- A status band at the top: "Nominal", "Pending" or "Firing", filled solid red or amber when something is wrong, with the alert names and how long each has been active.
+- One flat row per metric, stacked on a shared time axis: current value, a meter against the limit, the chart, and the alert tag for that metric.
+- Hover any chart and every row shows its value at that moment, with a synced crosshair.
+- Click a legend entry to hide a series. Download any row as CSV.
 - Time range (5m, 15m, 1h) and refresh interval (off, 5 s, 15 s, 1 min), kept in the URL.
-- Dark and light theme (it follows your system, and the Theme button overrides it), and kiosk mode with `?kiosk` for a wall display.
-- An Explore section: pick any collected metric, choose `rate`, `last` or `p95`, set a window and grouping, and see a chart and table.
+- Keyboard: `1` `2` `3` range, `r` refresh, `t` theme, `k` kiosk.
+- Dark by default, with a light theme, and kiosk mode with `?kiosk` for a wall display.
+- An alert rules list and an ad hoc query form: pick any collected metric, choose `rate`, `last` or `p95`, set a window and grouping.
 
 The feature list came from studying Prometheus and Grafana. See `docs/reverse-engineering-notes.md`.
 
