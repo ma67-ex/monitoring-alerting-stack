@@ -15,6 +15,18 @@ services:
     build: ./collector
     restart: unless-stopped
     ports: ["127.0.0.1:9090:9090"]
+    environment:
+      ALERT_WEBHOOK_URL: ${ALERT_WEBHOOK_URL:-}
+      PROBE_URLS: ${PROBE_URLS:-}
+      PROBE_INTERVAL: ${PROBE_INTERVAL:-60}
+      NTFY_TOPIC: ${NTFY_TOPIC:-}
+      NTFY_SERVER: ${NTFY_SERVER:-https://ntfy.sh}
+      ALERT_EMAIL_TO: ${ALERT_EMAIL_TO:-}
+      ALERT_EMAIL_FROM: ${ALERT_EMAIL_FROM:-}
+      SMTP_HOST: ${SMTP_HOST:-smtp.gmail.com}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASS: ${SMTP_PASS:-}
     depends_on:
       app: {condition: service_healthy}
     healthcheck:

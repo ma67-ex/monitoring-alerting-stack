@@ -1,9 +1,9 @@
 import json, os, sys, threading, unittest, urllib.error, urllib.request
-from http.server import ThreadingHTTPServer
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from unittest import mock
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "collector"))
 import collector
-from collector import Store, Alerts, parse, evaluate, scrape, tick, make_handler, _rate
+from collector import Store, Alerts, webhook_notifier, email_notifier, ntfy_notifier, probe, notifiers_from_env, parse, evaluate, scrape, tick, make_handler, _rate
 
 
 def counter(store, name, labels, start, per_sec, n=13, dt=5):
@@ -85,6 +85,90 @@ class T(unittest.TestCase):
         s.add("up", {}, 30, 0.0); a.evaluate(s, 30); self.assertEqual(state(), "pending")
         s.add("up", {}, 41, 0.0); a.evaluate(s, 41); self.assertEqual(state(), "firing")
         s.add("up", {}, 50, 1.0); a.evaluate(s, 50); self.assertEqual(state(), "inactive")
+
+    def test_notifies_once_on_firing_and_once_on_resolve(self):
+        sent, s = [], Store()
+        a = Alerts([{"alert": "Down", "summary": "x", "expr": {"fn": "last", "metric": "up", "window": 15},
+                     "op": "<", "threshold": 1, "for": 30}], sent.append)
+        for t, v in [(0, 1.0), (10, 0.0), (30, 0.0), (41, 0.0), (45, 0.0), (50, 1.0), (55, 1.0)]:
+            s.add("up", {}, t, v); a.evaluate(s, t)
+        self.assertEqual([(e["alert"], e["status"], e["time"]) for e in sent], [("Down", "firing", 41), ("Down", "resolved", 50)])
+
+    def test_webhook_posts_json_and_survives_failure(self):
+        got, done = [], threading.Event()
+        class H(BaseHTTPRequestHandler):
+            def do_POST(self):
+                got.append(json.loads(self.rfile.read(int(self.headers["Content-Length"]))))
+                self.send_response(200); self.send_header("Content-Length", "0"); self.end_headers(); done.set()
+            def log_message(self, *a): pass
+        srv = ThreadingHTTPServer(("127.0.0.1", 0), H)
+        threading.Thread(target=srv.serve_forever, daemon=True).start()
+        try:
+            webhook_notifier(f"http://127.0.0.1:{srv.server_port}/")({"alert": "A", "status": "firing"})
+            self.assertTrue(done.wait(3)); self.assertEqual(got, [{"alert": "A", "status": "firing"}])
+        finally:
+            srv.shutdown()
+        webhook_notifier("http://127.0.0.1:1/")({"alert": "A", "status": "firing"})  # unreachable: must not raise
+
+    def test_email_notifier_sends_subject_and_body(self):
+        done, smtp = threading.Event(), mock.MagicMock()
+        smtp.__enter__.return_value = smtp
+        smtp.send_message.side_effect = lambda m: done.set()
+        with mock.patch.object(collector.smtplib, "SMTP", return_value=smtp) as cls:
+            email_notifier("h", 587, "u", "p", "a@x", "b@x")(
+                {"alert": "Down", "status": "firing", "summary": "app down", "value": 0.0})
+            self.assertTrue(done.wait(3))
+        cls.assert_called_once_with("h", 587, timeout=10)
+        smtp.starttls.assert_called_once(); smtp.login.assert_called_once_with("u", "p")
+        msg = smtp.send_message.call_args[0][0]
+        self.assertEqual((msg["Subject"], msg["To"], msg["From"]), ("[FIRING] Down", "b@x", "a@x"))
+        self.assertIn("app down", msg.get_content())
+
+    def test_email_failure_does_not_raise(self):
+        tried = threading.Event()
+        def boom(*a, **k):
+            tried.set(); raise OSError
+        with mock.patch.object(collector.smtplib, "SMTP", side_effect=boom):
+            email_notifier("h", 587, "u", "p", "a@x", "b@x")({"alert": "A", "status": "firing", "summary": "", "value": 1})
+            self.assertTrue(tried.wait(3))  # the thread ran and swallowed the error
+
+    def test_notifiers_from_env(self):
+        self.assertIsNone(notifiers_from_env({}))
+        self.assertIsNotNone(notifiers_from_env({"ALERT_EMAIL_TO": "b@x", "SMTP_USER": "u", "SMTP_PASS": "p"}))
+
+    def _probe(self, **urlopen_kw):
+        s = Store()
+        with mock.patch.object(collector.urllib.request, "urlopen", **urlopen_kw):
+            probe(s, "http://h", 1.0)
+        return evaluate(s, {"fn": "last", "metric": "probe_up"}, 1.0)[()]
+
+    def test_probe_up_only_for_200_healthy_or_warning(self):
+        ok = lambda body: dict(return_value=mock.Mock(read=lambda: body))
+        self.assertEqual(self._probe(**ok(b'{"status":"HEALTHY"}')), 1.0)
+        self.assertEqual(self._probe(**ok(b'{"status":"WARNING"}')), 1.0)
+        self.assertEqual(self._probe(**ok(b"ok")), 1.0)
+        self.assertEqual(self._probe(**ok(b'{"status":"UNHEALTHY"}')), 0.0)
+        self.assertEqual(self._probe(**ok(b'{"status":"REDIS_DOWN"}')), 0.0)
+        self.assertEqual(self._probe(side_effect=urllib.error.HTTPError("http://h", 503, "x", {}, None)), 0.0)
+        self.assertEqual(self._probe(side_effect=OSError), 0.0)
+
+    def test_probe_down_rule_fires_per_url_then_resolves(self):
+        sent, s = [], Store()
+        a = Alerts(json.load(open(os.path.join(os.path.dirname(collector.__file__), "alerts.json"))), sent.append)
+        for t, up in [(0, 1.0), (60, 0.0), (120, 0.0), (180, 0.0), (240, 1.0)]:
+            s.add("probe_up", {"url": "http://h"}, t, up); a.evaluate(s, t)
+        self.assertEqual([(e["alert"], e["status"]) for e in sent if e["alert"] == "ProbeDown"],
+                         [("ProbeDown", "firing"), ("ProbeDown", "resolved")])
+
+    def test_ntfy_posts_title_priority_and_body(self):
+        done, req = threading.Event(), []
+        with mock.patch.object(collector.urllib.request, "urlopen", side_effect=lambda r, timeout: (req.append(r), done.set(), mock.Mock())[2]):
+            ntfy_notifier("https://ntfy.example/", "t0pic")({"alert": "ProbeDown", "status": "firing", "summary": "down", "value": 0.0})
+            self.assertTrue(done.wait(3))
+        r = req[0]
+        self.assertEqual(r.full_url, "https://ntfy.example/t0pic")
+        self.assertEqual((r.get_header("Title"), r.get_header("Priority")), ("[FIRING] ProbeDown", "high"))
+        self.assertIn(b"down", r.data)
 
     def test_rate_same_timestamp_is_none(self):
         self.assertIsNone(_rate([(5, 1), (5, 2)]))

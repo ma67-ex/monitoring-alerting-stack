@@ -6,7 +6,8 @@ A query is a small JSON spec:
   {"fn": "ratio", "num": <spec>, "den": <spec>}
   {"fn": "quantile", "q": 0.95, "metric": "x_seconds_bucket", "window": 60}
 """
-import json, os, re, threading, time, urllib.request
+import json, os, re, smtplib, threading, time, urllib.request
+from email.message import EmailMessage
 from bisect import bisect_left, bisect_right
 from collections import defaultdict
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -138,8 +139,8 @@ OPS = {">": lambda a, b: a > b, "<": lambda a, b: a < b}
 class Alerts:
     """Each rule moves inactive -> pending -> firing once its condition has held for `for` seconds."""
 
-    def __init__(self, rules):
-        self.rules = rules
+    def __init__(self, rules, notify=None):
+        self.rules, self.notify = rules, notify
         self.state = {r["alert"]: {"state": "inactive", "since": None, "value": None} for r in rules}
 
     def evaluate(self, store, now):
@@ -147,6 +148,7 @@ class Alerts:
             values = evaluate(store, r["expr"], now)
             hits = [v for v in values.values() if OPS[r["op"]](v, r["threshold"])]
             s = self.state[r["alert"]]
+            was = s["state"]
             s["value"] = max(values.values()) if values else None
             if not hits:
                 s.update(state="inactive", since=None)
@@ -154,10 +156,69 @@ class Alerts:
                 s.update(state="pending", since=now)
             if hits and now - s["since"] >= r.get("for", 0):
                 s["state"] = "firing"
+            if self.notify and (was == "firing") != (s["state"] == "firing"):
+                self.notify({"alert": r["alert"], "status": "firing" if s["state"] == "firing" else "resolved",
+                             "summary": r.get("summary", ""), "value": s["value"], "time": now})
 
     def snapshot(self):
         return [{"alert": r["alert"], "summary": r.get("summary", ""), "op": r["op"], "threshold": r["threshold"],
                  "unit": r.get("unit", ""), **self.state[r["alert"]]} for r in self.rules]
+
+
+def webhook_notifier(url):
+    """Return a notify(event) that POSTs the event as JSON in a background thread. Failures are logged, never raised."""
+    def post(event):
+        try:
+            req = urllib.request.Request(url, json.dumps(event).encode(), {"Content-Type": "application/json"})
+            urllib.request.urlopen(req, timeout=5).close()
+        except Exception as e:
+            print(f"webhook {event['alert']} {event['status']} failed: {e!r}", flush=True)
+    return lambda event: threading.Thread(target=post, args=(event,), daemon=True).start()
+
+
+def email_notifier(host, port, user, password, sender, to):
+    """Return a notify(event) that sends one plain-text email per event over STARTTLS, in a background thread."""
+    def send(event):
+        try:
+            msg = EmailMessage()
+            msg["Subject"] = f"[{event['status'].upper()}] {event['alert']}"
+            msg["From"], msg["To"] = sender, to
+            msg.set_content(f"{event['alert']} is {event['status']}.\n{event['summary']}\nValue: {event['value']}\n")
+            with smtplib.SMTP(host, port, timeout=10) as smtp:
+                smtp.starttls()
+                smtp.login(user, password)
+                smtp.send_message(msg)
+        except Exception as e:
+            print(f"email {event['alert']} {event['status']} failed: {e!r}", flush=True)
+    return lambda event: threading.Thread(target=send, args=(event,), daemon=True).start()
+
+
+def ntfy_notifier(server, topic):
+    """Return a notify(event) that pushes to a phone via ntfy, in a background thread."""
+    def send(event):
+        try:
+            firing = event["status"] == "firing"
+            headers = {"Title": f"[{event['status'].upper()}] {event['alert']}", "Priority": "high" if firing else "default",
+                       "Tags": "rotating_light" if firing else "white_check_mark"}
+            body = f"{event['summary']}\nvalue: {event['value']}".encode()
+            urllib.request.urlopen(urllib.request.Request(f"{server.rstrip('/')}/{topic}", body, headers), timeout=5).close()
+        except Exception as e:
+            print(f"ntfy {event['alert']} {event['status']} failed: {e!r}", flush=True)
+    return lambda event: threading.Thread(target=send, args=(event,), daemon=True).start()
+
+
+def notifiers_from_env(env):
+    """Build the notify callable from environment variables, or None if nothing is configured."""
+    out = []
+    if env.get("ALERT_WEBHOOK_URL"):
+        out.append(webhook_notifier(env["ALERT_WEBHOOK_URL"]))
+    if env.get("NTFY_TOPIC"):
+        out.append(ntfy_notifier(env.get("NTFY_SERVER", "https://ntfy.sh"), env["NTFY_TOPIC"]))
+    if env.get("ALERT_EMAIL_TO"):
+        out.append(email_notifier(env.get("SMTP_HOST", "smtp.gmail.com"), int(env.get("SMTP_PORT", 587)),
+                                  env["SMTP_USER"], env["SMTP_PASS"], env.get("ALERT_EMAIL_FROM", env["SMTP_USER"]),
+                                  env["ALERT_EMAIL_TO"]))
+    return (lambda event: [n(event) for n in out]) if out else None
 
 
 def scrape(store, url, now):
@@ -171,13 +232,30 @@ def scrape(store, url, now):
         store.add(name, labels, now, v)
 
 
-def tick(store, alerts, targets, now):
+def probe(store, url, now):
+    """Record probe_up{url} for an HTTP health endpoint: 1 if it answers 200 and, when the JSON body has a
+    status, that status is HEALTHY or WARNING. A non-200, an unreachable host or any other status is 0."""
+    try:
+        body = urllib.request.urlopen(url, timeout=10).read()
+        status = json.loads(body).get("status") if body.lstrip().startswith(b"{") else None
+        up = 1.0 if status in (None, "HEALTHY", "WARNING") else 0.0
+    except (OSError, ValueError, AttributeError):  # HTTPError (e.g. 503) is an OSError
+        up = 0.0
+    store.add("probe_up", {"url": url}, now, up)
+
+
+def tick(store, alerts, targets, now, probes=()):
     """One scrape-and-evaluate cycle. A bad target or rule must never kill the loop."""
     for t in targets:
         try:
             scrape(store, t, now)
         except Exception as e:
             print(f"scrape {t} failed: {e!r}", flush=True)
+    for u in probes:
+        try:
+            probe(store, u, now)
+        except Exception as e:
+            print(f"probe {u} failed: {e!r}", flush=True)
     store.prune(now)
     try:
         alerts.evaluate(store, now)
@@ -231,11 +309,20 @@ def main():
     targets = os.environ.get("COLLECTOR_TARGETS", "http://app:8000/metrics").split(",")
     interval = float(os.environ.get("COLLECTOR_INTERVAL", 5))
     store = Store()
-    alerts = Alerts(json.load(open(os.path.join(os.path.dirname(__file__), "alerts.json"))))
+    # no notifier configured means alerts show on the dashboard only
+    alerts = Alerts(json.load(open(os.path.join(os.path.dirname(__file__), "alerts.json"))), notifiers_from_env(os.environ))
+
+    probes = [u for u in os.environ.get("PROBE_URLS", "").split(",") if u]
+    probe_every, last_probe = float(os.environ.get("PROBE_INTERVAL", 60)), 0.0  # probes run less often than scrapes
 
     def loop():
+        nonlocal last_probe
         while True:
-            tick(store, alerts, targets, time.time())
+            now = time.time()
+            due = now - last_probe >= probe_every
+            tick(store, alerts, targets, now, probes if due else ())
+            if due:
+                last_probe = now
             time.sleep(interval)
 
     threading.Thread(target=loop, daemon=True).start()

@@ -64,6 +64,36 @@ Rules live in `collector/alerts.json`. Each rule is a query, a comparison, and a
 | `ServiceDown` | The service has not answered scrapes for 30 seconds. |
 | `HighErrorRate` | More than 5% of requests fail, for 1 minute. |
 | `HighLatencyP95` | The 95th percentile latency is above 1 second, for 1 minute. |
+| `ProbeDown` | A URL in `PROBE_URLS` answered with a non-200 or an unhealthy status for 2 minutes. |
+
+### Probing an external service
+
+Set `PROBE_URLS` (comma-separated) and the collector requests each URL every `PROBE_INTERVAL` seconds (default 60). It records `probe_up{url}` as 1 when the reply is HTTP 200 and, if the body is JSON with a `status` field, that status is `HEALTHY` or `WARNING`. A non-200, a timeout, or any other status counts as 0. `ProbeDown` fires per URL after two minutes of failures, and the metric shows up in the explorer like any other. I use it to watch the health endpoint of a deployed dashboard (`/api/health?compact=1`).
+
+### Notifications
+
+Copy `.env.example` to `.env` and fill in what you want. Nothing is on by default, and `.env` is git-ignored.
+
+**Phone push (ntfy):** install the free ntfy app, subscribe to a long random topic name, and set `NTFY_TOPIC` to it. Each firing or resolved event arrives as a push, high priority when firing. ntfy.sh topics have no login, so the random name is the only secret.
+
+
+Set `ALERT_WEBHOOK_URL` on the collector and it POSTs JSON once when an alert starts firing and once when it resolves (pending alerts send nothing):
+
+```json
+{"alert": "HighErrorRate", "status": "firing", "summary": "more than 5% of requests are failing", "value": 0.5, "time": 1790000000.0}
+```
+
+To get email instead, or as well, set these on the collector (for example in a `.env` file next to `docker-compose.yml`, which Compose reads automatically):
+
+```
+ALERT_EMAIL_TO=you@example.com
+SMTP_USER=you@gmail.com
+SMTP_PASS=<app password>
+```
+
+`SMTP_HOST` defaults to `smtp.gmail.com`, `SMTP_PORT` to 587 (STARTTLS), and `ALERT_EMAIL_FROM` to `SMTP_USER`. Gmail needs an app password, not your account password. Each firing or resolved event sends one plain-text email whose subject is `[FIRING] AlertName` or `[RESOLVED] AlertName`. Never commit the `.env` file.
+
+Slack and Discord incoming webhooks need their own payload shape, so point this at a small relay or a generic receiver such as webhook.site. A failed POST is logged and dropped.
 
 ## Break it on purpose
 
@@ -95,5 +125,5 @@ Supported functions are `rate`, `last`, `ratio`, and `quantile`. Counter resets 
 ## Limits
 
 - Data is kept in memory for one hour and lost on restart. A series that stops reporting is dropped after an hour.
-- Alerts show on the dashboard only. Nothing sends them to email or chat yet.
+- Alerts show on the dashboard and, if `ALERT_WEBHOOK_URL` is set, are POSTed there. There is no retry, grouping or silencing, and no delivery guarantee for email.
 - Only one kind of target is supported: an HTTP endpoint in the Prometheus text format.

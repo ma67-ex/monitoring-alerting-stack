@@ -49,5 +49,21 @@
     "threshold": 1,
     "for": 60,
     "unit": "seconds"
+  },
+  {
+    "alert": "ProbeDown",
+    "summary": "a probed health endpoint is failing or unhealthy",
+    "expr": {
+      "fn": "last",
+      "metric": "probe_up",
+      "by": [
+        "url"
+      ],
+      "window": 120
+    },
+    "op": "<",
+    "threshold": 1,
+    "for": 120,
+    "unit": "up"
   }
 ]
