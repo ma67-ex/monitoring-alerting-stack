@@ -6,9 +6,26 @@ app_port: 7860
 
 # monitoring-alerting-stack
 
+[![Tests](https://github.com/ma67-ex/monitoring-alerting-stack/actions/workflows/test.yml/badge.svg)](https://github.com/ma67-ex/monitoring-alerting-stack/actions/workflows/test.yml)
+![Python](https://img.shields.io/badge/python-3-3776AB?logo=python&logoColor=white)
+![Dependencies](https://img.shields.io/badge/dependencies-none-2ea44f)
+![Docker](https://img.shields.io/badge/docker-compose-2496ED?logo=docker&logoColor=white)
+![License](https://img.shields.io/badge/license-MIT-green)
+
+![Dashboard with the HighErrorRate alert firing: status band, error rate at 77.8 percent against a 5 percent limit, request, latency and token charts on a shared time axis](docs/dashboard.jpg)
+
+*The dashboard during a deliberate failure: `HighErrorRate` is firing and the error-rate row is past its 5% limit.*
+
 A small monitoring system written from scratch in Python, with no third-party packages. It has three parts: a demo service that exposes metrics, a collector that scrapes and stores them and fires alerts, and a web dashboard.
 
 The demo service stands in for an LLM agent. It answers requests by calling one to three fake tools, and it can be told to fail or slow down on demand. That makes it easy to practice spotting and handling incidents.
+
+```
+ demo agent (:8000)  --/metrics-->  collector (:9090)  --queries-->  dashboard (:3000)
+  fake tools, chaos                  scrape, store, alert            charts, alert status
+                                          |
+                                          +--> ntfy push, email, JSON webhook
+```
 
 ## The three services
 
@@ -76,14 +93,13 @@ Copy `.env.example` to `.env` and fill in what you want. Nothing is on by defaul
 
 **Phone push (ntfy):** install the free ntfy app, subscribe to a long random topic name, and set `NTFY_TOPIC` to it. Each firing or resolved event arrives as a push, high priority when firing. ntfy.sh topics have no login, so the random name is the only secret.
 
-
-Set `ALERT_WEBHOOK_URL` on the collector and it POSTs JSON once when an alert starts firing and once when it resolves (pending alerts send nothing):
+**Webhook:** set `ALERT_WEBHOOK_URL` on the collector and it POSTs JSON once when an alert starts firing and once when it resolves (pending alerts send nothing):
 
 ```json
 {"alert": "HighErrorRate", "status": "firing", "summary": "more than 5% of requests are failing", "value": 0.5, "time": 1790000000.0}
 ```
 
-To get email instead, or as well, set these on the collector (for example in a `.env` file next to `docker-compose.yml`, which Compose reads automatically):
+**Email:** to get email instead, or as well, set these on the collector (for example in a `.env` file next to `docker-compose.yml`, which Compose reads automatically):
 
 ```
 ALERT_EMAIL_TO=you@example.com
@@ -122,8 +138,22 @@ The dashboard's error-rate and p95 panels use the same 60 second window as their
 
 Supported functions are `rate`, `last`, `ratio`, and `quantile`. Counter resets are handled in `rate`.
 
+## Project layout
+
+```
+app/         demo agent service, load generator, and the small metrics library
+collector/   scraper, in-memory store, query engine, alert rules (alerts.json)
+dashboard/   web UI and panel definitions (dashboard.json)
+docs/        runbook, postmortem, and notes from studying Prometheus and Grafana
+tests/       unit tests for the service and collector (run in CI)
+```
+
 ## Limits
 
 - Data is kept in memory for one hour and lost on restart. A series that stops reporting is dropped after an hour.
 - Alerts show on the dashboard and, if `ALERT_WEBHOOK_URL` is set, are POSTed there. There is no retry, grouping or silencing, and no delivery guarantee for email.
 - Only one kind of target is supported: an HTTP endpoint in the Prometheus text format.
+
+## License
+
+MIT. See [LICENSE](LICENSE).
