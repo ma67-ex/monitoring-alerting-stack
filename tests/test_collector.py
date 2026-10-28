@@ -59,6 +59,15 @@ class T(unittest.TestCase):
         s.prune(150)
         self.assertEqual([n["name"] for n in s.names()], ["live"])
 
+    def test_window_bounds_match_and_retention(self):
+        s = Store(retention=100)
+        for t in range(0, 301, 10):
+            s.add("m", {"k": "a"}, t, t); s.add("m", {"k": "b"}, t, t)
+        got = s.window("m", 250, 270, {"k": "a"})
+        self.assertEqual(got, [({"k": "a"}, [(250, 250), (260, 260), (270, 270)])])
+        self.assertEqual(s.window("m", 0, 190), [])  # trimmed: oldest kept point is 200
+        self.assertEqual(s.window("nope", 0, 300), [])
+
     def test_group_by(self):
         s = Store()
         counter(s, "t", {"tool": "a"}, 0, 1)

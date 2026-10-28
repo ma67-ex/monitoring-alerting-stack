@@ -7,10 +7,12 @@ A query is a small JSON spec:
   {"fn": "quantile", "q": 0.95, "metric": "x_seconds_bucket", "window": 60}
 """
 import json, os, re, threading, time, urllib.request
-from collections import defaultdict, deque
+from bisect import bisect_left, bisect_right
+from collections import defaultdict
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse, parse_qs
 
+_t = lambda p: p[0]
 LINE = re.compile(r"^([a-zA-Z_:][\w:]*)(?:\{(.*)\})?\s+(\S+)")
 LABEL = re.compile(r'(\w+)="((?:[^"\\]|\\.)*)"')
 
@@ -31,37 +33,45 @@ def parse(text):
 
 
 class Store:
+    """series[name][sorted label tuple] = list of (t, v), oldest first. Lists, so bisect finds a window fast."""
+
     def __init__(self, retention=3600):
-        self.retention, self.series, self.lock = retention, defaultdict(deque), threading.Lock()
+        self.retention, self.series, self.lock = retention, defaultdict(dict), threading.Lock()
 
     def add(self, name, labels, t, v):
         with self.lock:
-            pts = self.series[(name, tuple(sorted(labels.items())))]
+            pts = self.series[name].setdefault(tuple(sorted(labels.items())), [])
             pts.append((t, v))
-            while pts[0][0] < t - self.retention:
-                pts.popleft()
+            old = bisect_left(pts, t - self.retention, key=_t)
+            if old:
+                del pts[:old]
 
     def prune(self, now):
         """Drop series that have not reported within the retention period."""
         with self.lock:
-            for k in [k for k, p in self.series.items() if not p or p[-1][0] < now - self.retention]:
-                del self.series[k]
+            for name in list(self.series):
+                by = self.series[name]
+                for k in [k for k, p in by.items() if p[-1][0] < now - self.retention]:
+                    del by[k]
+                if not by:
+                    del self.series[name]
 
     def names(self):
         """Metric names with the label keys seen on each."""
         with self.lock:
-            out = defaultdict(set)
-            for name, labels in self.series:
-                out[name].update(k for k, _ in labels)
-        return [{"name": n, "labels": sorted(k)} for n, k in sorted(out.items())]
+            return [{"name": n, "labels": sorted({k for lab in by for k, _ in lab})} for n, by in sorted(self.series.items())]
 
-    def window(self, name, t0, t1):
+    def window(self, name, t0, t1, match=None):
+        """Yield (labels, points in [t0, t1]) for series of `name` whose labels contain every pair in `match`."""
+        out = []
         with self.lock:
-            items = [(k, list(p)) for k, p in self.series.items() if k[0] == name]
-        for (_, labels), pts in items:
-            sel = [p for p in pts if t0 <= p[0] <= t1]
-            if sel:
-                yield dict(labels), sel
+            for key, pts in self.series.get(name, {}).items():
+                if match and any((k, v) not in key for k, v in match.items()):
+                    continue
+                sel = pts[bisect_left(pts, t0, key=_t):bisect_right(pts, t1, key=_t)]
+                if sel:
+                    out.append((dict(key), sel))
+        return out
 
 
 def _rate(pts):
@@ -77,9 +87,7 @@ def _rate(pts):
 
 
 def _series(store, spec, t):
-    for labels, pts in store.window(spec["metric"], t - spec.get("window", 60), t):
-        if all(labels.get(k) == v for k, v in spec.get("match", {}).items()):
-            yield labels, pts
+    return store.window(spec["metric"], t - spec.get("window", 60), t, spec.get("match"))
 
 
 def _key(spec, labels):
