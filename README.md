@@ -64,11 +64,11 @@ Rules live in `collector/alerts.json`. Each rule is a query, a comparison, and a
 | `ServiceDown` | The service has not answered scrapes for 30 seconds. |
 | `HighErrorRate` | More than 5% of requests fail, for 1 minute. |
 | `HighLatencyP95` | The 95th percentile latency is above 1 second, for 1 minute. |
-| `ProbeDown` | A URL in `PROBE_URLS` answered with a non-200 or an unhealthy status for 2 minutes. |
+| `ProbeDown` | A URL in `PROBE_URLS` answered with a non-200 or an unhealthy status on its last probe, held for 2 minutes. |
 
 ### Probing an external service
 
-Set `PROBE_URLS` (comma-separated) and the collector requests each URL every `PROBE_INTERVAL` seconds (default 60). It records `probe_up{url}` as 1 when the reply is HTTP 200 and, if the body is JSON with a `status` field, that status is `HEALTHY` or `WARNING`. A non-200, a timeout, or any other status counts as 0. `ProbeDown` fires per URL after two minutes of failures, and the metric shows up in the explorer like any other. I use it to watch the health endpoint of a deployed dashboard (`/api/health?compact=1`).
+Set `PROBE_URLS` (comma-separated) and the collector requests each URL every `PROBE_INTERVAL` seconds (default 300; use a large value such as 86400 for a once-a-day check, since each probe can cost the target real work). Between probes the collector re-records the last result every tick, so the metric and the alert stay current without extra requests. It records `probe_up{url}` as 1 when the reply is HTTP 200 and, if the body is JSON with a `status` field, that status is `HEALTHY` or `WARNING`. A non-200, a timeout, or any other status counts as 0. `ProbeDown` fires per URL two minutes after a probe fails and resolves after the next probe succeeds. The check also runs once when the collector starts, and the metric shows up in the explorer like any other. I use it to watch the health endpoint of a deployed dashboard (`/api/health?compact=1`).
 
 ### Notifications
 

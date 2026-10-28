@@ -160,6 +160,15 @@ class T(unittest.TestCase):
         self.assertEqual([(e["alert"], e["status"]) for e in sent if e["alert"] == "ProbeDown"],
                          [("ProbeDown", "firing"), ("ProbeDown", "resolved")])
 
+    def test_between_probes_last_result_is_replayed_without_a_request(self):
+        s = Store()
+        with mock.patch.object(collector.urllib.request, "urlopen", side_effect=OSError) as uo:
+            tick(s, Alerts([]), [], 0.0, ["http://h"], True)           # probe runs, host is down
+            tick(s, Alerts([]), [], 5.0, ["http://h"], False)          # not due: no request, result carried
+            tick(s, Alerts([]), [], 5000.0, ["http://h"], False)
+        self.assertEqual(uo.call_count, 1)
+        self.assertEqual(evaluate(s, {"fn": "last", "metric": "probe_up", "window": 15}, 5000.0), {(): 0.0})
+
     def test_ntfy_posts_title_priority_and_body(self):
         done, req = threading.Event(), []
         with mock.patch.object(collector.urllib.request, "urlopen", side_effect=lambda r, timeout: (req.append(r), done.set(), mock.Mock())[2]):

@@ -38,6 +38,7 @@ class Store:
 
     def __init__(self, retention=3600):
         self.retention, self.series, self.lock = retention, defaultdict(dict), threading.Lock()
+        self.last_probe = {}  # url -> last probe result, replayed between probes
 
     def add(self, name, labels, t, v):
         with self.lock:
@@ -241,10 +242,11 @@ def probe(store, url, now):
         up = 1.0 if status in (None, "HEALTHY", "WARNING") else 0.0
     except (OSError, ValueError, AttributeError):  # HTTPError (e.g. 503) is an OSError
         up = 0.0
+    store.last_probe[url] = up
     store.add("probe_up", {"url": url}, now, up)
 
 
-def tick(store, alerts, targets, now, probes=()):
+def tick(store, alerts, targets, now, probes=(), probe_due=True):
     """One scrape-and-evaluate cycle. A bad target or rule must never kill the loop."""
     for t in targets:
         try:
@@ -253,7 +255,10 @@ def tick(store, alerts, targets, now, probes=()):
             print(f"scrape {t} failed: {e!r}", flush=True)
     for u in probes:
         try:
-            probe(store, u, now)
+            if probe_due:
+                probe(store, u, now)
+            elif u in store.last_probe:  # between probes, keep the last result fresh so retention and alert windows never see a gap
+                store.add("probe_up", {"url": u}, now, store.last_probe[u])
         except Exception as e:
             print(f"probe {u} failed: {e!r}", flush=True)
     store.prune(now)
@@ -313,14 +318,14 @@ def main():
     alerts = Alerts(json.load(open(os.path.join(os.path.dirname(__file__), "alerts.json"))), notifiers_from_env(os.environ))
 
     probes = [u for u in os.environ.get("PROBE_URLS", "").split(",") if u]
-    probe_every, last_probe = float(os.environ.get("PROBE_INTERVAL", 60)), 0.0  # probes run less often than scrapes
+    probe_every, last_probe = float(os.environ.get("PROBE_INTERVAL", 300)), 0.0  # probes run less often than scrapes
 
     def loop():
         nonlocal last_probe
         while True:
             now = time.time()
             due = now - last_probe >= probe_every
-            tick(store, alerts, targets, now, probes if due else ())
+            tick(store, alerts, targets, now, probes, due)
             if due:
                 last_probe = now
             time.sleep(interval)
