@@ -6,7 +6,7 @@ A query is a small JSON spec:
   {"fn": "ratio", "num": <spec>, "den": <spec>}
   {"fn": "quantile", "q": 0.95, "metric": "x_seconds_bucket", "window": 60}
 """
-import json, os, re, smtplib, threading, time, urllib.request
+import json, os, re, signal, smtplib, sys, threading, time, urllib.request
 from email.message import EmailMessage
 from bisect import bisect_left, bisect_right
 from collections import defaultdict
@@ -140,8 +140,8 @@ OPS = {">": lambda a, b: a > b, "<": lambda a, b: a < b}
 class Alerts:
     """Each rule moves inactive -> pending -> firing once its condition has held for `for` seconds."""
 
-    def __init__(self, rules, notify=None):
-        self.rules, self.notify = rules, notify
+    def __init__(self, rules, notify=None, silenced=()):
+        self.rules, self.notify, self.silenced = rules, notify, set(silenced)  # a silenced alert still shows its state, it just sends nothing
         self.state = {r["alert"]: {"state": "inactive", "since": None, "value": None} for r in rules}
 
     def evaluate(self, store, now):
@@ -157,55 +157,66 @@ class Alerts:
                 s.update(state="pending", since=now)
             if hits and now - s["since"] >= r.get("for", 0):
                 s["state"] = "firing"
-            if self.notify and (was == "firing") != (s["state"] == "firing"):
+            if self.notify and r["alert"] not in self.silenced and (was == "firing") != (s["state"] == "firing"):
                 self.notify({"alert": r["alert"], "status": "firing" if s["state"] == "firing" else "resolved",
                              "summary": r.get("summary", ""), "value": s["value"], "time": now})
 
     def snapshot(self):
         return [{"alert": r["alert"], "summary": r.get("summary", ""), "op": r["op"], "threshold": r["threshold"],
-                 "unit": r.get("unit", ""), **self.state[r["alert"]]} for r in self.rules]
+                 "unit": r.get("unit", ""), "silenced": r["alert"] in self.silenced, **self.state[r["alert"]]} for r in self.rules]
 
 
-def webhook_notifier(url):
-    """Return a notify(event) that POSTs the event as JSON in a background thread. Failures are logged, never raised."""
+RETRY_DELAYS = (1, 5, 20)  # seconds to wait between attempts: four tries in all, then the failure is logged and dropped
+
+
+def deliver(label, event, send, sleep=time.sleep):
+    """Run send(event), retrying after a failure with the delays above. Never raises; True once it went through."""
+    for attempt in range(len(RETRY_DELAYS) + 1):
+        try:
+            send(event)
+            return True
+        except Exception as e:
+            if attempt == len(RETRY_DELAYS):
+                print(f"{label} {event['alert']} {event['status']} failed after {attempt + 1} tries: {e!r}", flush=True)
+                return False
+            sleep(RETRY_DELAYS[attempt])
+
+
+def _background(label, send, sleep):
+    return lambda event: threading.Thread(target=deliver, args=(label, event, send, sleep), daemon=True).start()
+
+
+def webhook_notifier(url, sleep=time.sleep):
+    """Return a notify(event) that POSTs the event as JSON in a background thread, retrying on failure."""
     def post(event):
-        try:
-            req = urllib.request.Request(url, json.dumps(event).encode(), {"Content-Type": "application/json"})
-            urllib.request.urlopen(req, timeout=5).close()
-        except Exception as e:
-            print(f"webhook {event['alert']} {event['status']} failed: {e!r}", flush=True)
-    return lambda event: threading.Thread(target=post, args=(event,), daemon=True).start()
+        req = urllib.request.Request(url, json.dumps(event).encode(), {"Content-Type": "application/json"})
+        urllib.request.urlopen(req, timeout=5).close()
+    return _background("webhook", post, sleep)
 
 
-def email_notifier(host, port, user, password, sender, to):
-    """Return a notify(event) that sends one plain-text email per event over STARTTLS, in a background thread."""
+def email_notifier(host, port, user, password, sender, to, sleep=time.sleep):
+    """Return a notify(event) that sends one plain-text email per event over STARTTLS, in a background thread, retrying on failure."""
     def send(event):
-        try:
-            msg = EmailMessage()
-            msg["Subject"] = f"[{event['status'].upper()}] {event['alert']}"
-            msg["From"], msg["To"] = sender, to
-            msg.set_content(f"{event['alert']} is {event['status']}.\n{event['summary']}\nValue: {event['value']}\n")
-            with smtplib.SMTP(host, port, timeout=10) as smtp:
-                smtp.starttls()
-                smtp.login(user, password)
-                smtp.send_message(msg)
-        except Exception as e:
-            print(f"email {event['alert']} {event['status']} failed: {e!r}", flush=True)
-    return lambda event: threading.Thread(target=send, args=(event,), daemon=True).start()
+        msg = EmailMessage()
+        msg["Subject"] = f"[{event['status'].upper()}] {event['alert']}"
+        msg["From"], msg["To"] = sender, to
+        msg.set_content(f"{event['alert']} is {event['status']}.\n{event['summary']}\nValue: {event['value']}\n")
+        with smtplib.SMTP(host, port, timeout=10) as smtp:
+            smtp.starttls()
+            smtp.login(user, password)
+            smtp.send_message(msg)
+    return _background("email", send, sleep)
 
 
-def ntfy_notifier(server, topic):
-    """Return a notify(event) that pushes to a phone via ntfy, in a background thread."""
+def ntfy_notifier(server, topic, sleep=time.sleep):
+    """Return a notify(event) that pushes to a phone via ntfy, in a background thread, retrying on failure."""
     def send(event):
-        try:
-            firing = event["status"] == "firing"
-            headers = {"Title": f"[{event['status'].upper()}] {event['alert']}", "Priority": "high" if firing else "default",
-                       "Tags": "rotating_light" if firing else "white_check_mark"}
-            body = f"{event['summary']}\nvalue: {event['value']}".encode()
-            urllib.request.urlopen(urllib.request.Request(f"{server.rstrip('/')}/{topic}", body, headers), timeout=5).close()
-        except Exception as e:
-            print(f"ntfy {event['alert']} {event['status']} failed: {e!r}", flush=True)
-    return lambda event: threading.Thread(target=send, args=(event,), daemon=True).start()
+        firing = event["status"] == "firing"
+        headers = {"Title": f"[{event['status'].upper()}] {event['alert']}", "Priority": "high" if firing else "default",
+                   "Tags": "rotating_light" if firing else "white_check_mark"}
+        body = f"{event['summary']}\nvalue: {event['value']}".encode()
+        urllib.request.urlopen(urllib.request.Request(f"{server.rstrip('/')}/{topic}", body, headers), timeout=5).close()
+    return _background("ntfy", send, sleep)
 
 
 def notifiers_from_env(env):
@@ -220,6 +231,37 @@ def notifiers_from_env(env):
                                   env["SMTP_USER"], env["SMTP_PASS"], env.get("ALERT_EMAIL_FROM", env["SMTP_USER"]),
                                   env["ALERT_EMAIL_TO"]))
     return (lambda event: [n(event) for n in out]) if out else None
+
+
+def save_snapshot(path, store, alerts, now):
+    """Write the series and alert states to `path` atomically, so a crash mid-write never leaves a half-written file."""
+    with store.lock:
+        series = [[n, [list(kv) for kv in key], pts] for n, by in store.series.items() for key, pts in by.items()]
+    tmp = f"{path}.tmp"
+    with open(tmp, "w") as f:
+        json.dump({"saved": now, "series": series, "alerts": alerts.state}, f)
+    os.replace(tmp, path)
+
+
+def load_snapshot(path, store, alerts, now):
+    """Restore what save_snapshot wrote: points still inside the retention period, and the state of known alerts.
+    A missing, unreadable or malformed file just means starting empty. Returns the number of series restored."""
+    try:
+        with open(path) as f:
+            snap = json.load(f)
+        loaded = 0
+        for name, labels, pts in snap["series"]:
+            key = tuple(sorted((k, v) for k, v in labels))
+            keep = [(t, v) for t, v in pts if t >= now - store.retention]
+            if keep:
+                store.series[name][key] = keep
+                loaded += 1
+        for name, st in snap.get("alerts", {}).items():
+            if name in alerts.state:  # a rule renamed or removed since the snapshot is ignored
+                alerts.state[name] = {"state": st["state"], "since": st["since"], "value": st["value"]}
+        return loaded
+    except (OSError, ValueError, KeyError, TypeError):
+        return 0
 
 
 def scrape(store, url, now):
@@ -315,21 +357,40 @@ def main():
     interval = float(os.environ.get("COLLECTOR_INTERVAL", 5))
     store = Store()
     # no notifier configured means alerts show on the dashboard only
-    alerts = Alerts(json.load(open(os.path.join(os.path.dirname(__file__), "alerts.json"))), notifiers_from_env(os.environ))
+    silenced = [a.strip() for a in os.environ.get("ALERT_SILENCE", "").split(",") if a.strip()]
+    alerts = Alerts(json.load(open(os.path.join(os.path.dirname(__file__), "alerts.json"))), notifiers_from_env(os.environ), silenced)
+    snapshot = os.environ.get("COLLECTOR_DATA", "")  # a file path turns on saving the data, so a restart does not start empty
+    snapshot_every, last_saved = float(os.environ.get("SNAPSHOT_INTERVAL", 60)), time.time()
+    if snapshot:
+        print(f"restored {load_snapshot(snapshot, store, alerts, time.time())} series from {snapshot}", flush=True)
 
     probes = [u for u in os.environ.get("PROBE_URLS", "").split(",") if u]
     probe_every, last_probe = float(os.environ.get("PROBE_INTERVAL", 300)), 0.0  # probes run less often than scrapes
 
     def loop():
-        nonlocal last_probe
+        nonlocal last_probe, last_saved
         while True:
             now = time.time()
             due = now - last_probe >= probe_every
             tick(store, alerts, targets, now, probes, due)
             if due:
                 last_probe = now
+            if snapshot and now - last_saved >= snapshot_every:
+                last_saved = now
+                try:
+                    save_snapshot(snapshot, store, alerts, now)
+                except OSError as e:
+                    print(f"saving {snapshot} failed: {e!r}", flush=True)
             time.sleep(interval)
 
+    def stop(*_):  # docker stop sends SIGTERM: save one last time so the restart picks up where this left off
+        if snapshot:
+            try:
+                save_snapshot(snapshot, store, alerts, time.time())
+            except OSError:
+                pass
+        sys.exit(0)
+    signal.signal(signal.SIGTERM, stop)
     threading.Thread(target=loop, daemon=True).start()
     ThreadingHTTPServer(("0.0.0.0", 9090), make_handler(store, alerts)).serve_forever()
 

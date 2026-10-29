@@ -124,6 +124,6 @@ Supported functions are `rate`, `last`, `ratio`, and `quantile`. Counter resets 
 
 ## Limits
 
-- Data is kept in memory for one hour and lost on restart. A series that stops reporting is dropped after an hour.
-- Alerts show on the dashboard and, if `ALERT_WEBHOOK_URL` is set, are POSTed there. There is no retry, grouping or silencing, and no delivery guarantee for email.
+- Data is kept in memory for one hour. In Docker Compose it is also saved every 60 seconds (`SNAPSHOT_INTERVAL`) and on a clean stop to a volume, and loaded again on start, so a restart keeps the last hour of history and does not re-send a "firing" alert that was already firing. Set `COLLECTOR_DATA` to a file path to turn this on outside Docker. A crash loses up to a minute. A series that stops reporting is dropped after an hour.
+- Alerts show on the dashboard and are sent to every channel you configure (webhook, ntfy, email). A failed send is retried after 1, 5 and 20 seconds, then dropped with a log line, so there is no delivery guarantee beyond that and nothing is queued across a restart. `ALERT_SILENCE=Name1,Name2` mutes notifications for those alerts (they still show on the dashboard, and `/api/alerts` reports `"silenced": true`). There is no grouping: each alert sends its own message.
 - Only one kind of target is supported: an HTTP endpoint in the Prometheus text format.
