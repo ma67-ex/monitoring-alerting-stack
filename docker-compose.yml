@@ -17,6 +17,8 @@ services:
     ports: ["127.0.0.1:9090:9090"]
     environment:
       ALERT_WEBHOOK_URL: ${ALERT_WEBHOOK_URL:-}
+      ALERT_SILENCE: ${ALERT_SILENCE:-}
+      COLLECTOR_DATA: /data/collector.json
       PROBE_URLS: ${PROBE_URLS:-}
       PROBE_INTERVAL: ${PROBE_INTERVAL:-300}
       NTFY_TOPIC: ${NTFY_TOPIC:-}
@@ -27,6 +29,7 @@ services:
       SMTP_PORT: ${SMTP_PORT:-587}
       SMTP_USER: ${SMTP_USER:-}
       SMTP_PASS: ${SMTP_PASS:-}
+    volumes: ["collector-data:/data"]
     depends_on:
       app: {condition: service_healthy}
     healthcheck:
@@ -41,3 +44,6 @@ services:
     healthcheck:
       <<: *health
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:3000/')"]
+
+volumes:
+  collector-data:

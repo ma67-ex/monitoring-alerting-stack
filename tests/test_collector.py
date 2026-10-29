@@ -3,7 +3,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from unittest import mock
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "collector"))
 import collector
-from collector import Store, Alerts, webhook_notifier, email_notifier, ntfy_notifier, probe, notifiers_from_env, parse, evaluate, scrape, tick, make_handler, _rate
+from collector import Store, Alerts, webhook_notifier, email_notifier, ntfy_notifier, probe, notifiers_from_env, parse, evaluate, deliver, save_snapshot, load_snapshot, RETRY_DELAYS, scrape, tick, make_handler, _rate
 
 
 def counter(store, name, labels, start, per_sec, n=13, dt=5):
@@ -217,6 +217,97 @@ class T(unittest.TestCase):
 
     def test_query_range_rejects_non_object_spec(self):
         self.assertEqual(self._get("/api/query_range?spec=%5B1%5D").code, 400)
+
+    def test_deliver_retries_then_succeeds(self):
+        calls, slept = [], []
+        def send(event):
+            calls.append(event)
+            if len(calls) < 3:
+                raise OSError("down")
+        self.assertTrue(deliver("t", {"alert": "A", "status": "firing"}, send, slept.append))
+        self.assertEqual((len(calls), slept), (3, [1, 5]))
+
+    def test_deliver_gives_up_after_the_last_retry_without_raising(self):
+        slept = []
+        def send(event):
+            raise OSError("down")
+        with mock.patch("builtins.print") as printed:
+            self.assertFalse(deliver("webhook", {"alert": "A", "status": "firing"}, send, slept.append))
+        self.assertEqual(slept, list(RETRY_DELAYS))
+        self.assertIn("failed after 4 tries", printed.call_args[0][0])
+
+    def test_webhook_is_retried_until_the_receiver_recovers(self):
+        got, done, hits = [], threading.Event(), []
+        class H(BaseHTTPRequestHandler):
+            def do_POST(self):
+                body = self.rfile.read(int(self.headers["Content-Length"]))
+                hits.append(1)
+                code = 500 if len(hits) < 3 else 200  # two failures, then it works
+                if code == 200:
+                    got.append(json.loads(body)); done.set()
+                self.send_response(code); self.send_header("Content-Length", "0"); self.end_headers()
+            def log_message(self, *a): pass
+        srv = ThreadingHTTPServer(("127.0.0.1", 0), H)
+        threading.Thread(target=srv.serve_forever, daemon=True).start()
+        try:
+            webhook_notifier(f"http://127.0.0.1:{srv.server_port}/", sleep=lambda s: None)({"alert": "A", "status": "firing"})
+            self.assertTrue(done.wait(5))
+            self.assertEqual((len(hits), got), (3, [{"alert": "A", "status": "firing"}]))
+        finally:
+            srv.shutdown()
+
+    def test_silenced_alert_still_fires_on_the_dashboard_but_sends_nothing(self):
+        sent, s = [], Store()
+        rule = lambda name: {"alert": name, "summary": "x", "expr": {"fn": "last", "metric": "up", "window": 15}, "op": "<", "threshold": 1}
+        a = Alerts([rule("Quiet"), rule("Loud")], sent.append, silenced=["Quiet"])
+        s.add("up", {}, 0, 0.0); a.evaluate(s, 0)
+        self.assertEqual([e["alert"] for e in sent], ["Loud"])
+        snap = {x["alert"]: x for x in a.snapshot()}
+        self.assertEqual((snap["Quiet"]["state"], snap["Quiet"]["silenced"], snap["Loud"]["silenced"]), ("firing", True, False))
+
+    def _down_rule(self):
+        return {"alert": "Down", "summary": "x", "expr": {"fn": "last", "metric": "up", "window": 15}, "op": "<", "threshold": 1}
+
+    def test_snapshot_round_trip_keeps_series_and_does_not_repage_a_firing_alert(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as d:
+            path = os.path.join(d, "collector.json")
+            s, a = Store(), Alerts([self._down_rule()])
+            s.add("up", {"instance": "http://app"}, 100, 0.0)
+            s.add("up", {"instance": "http://app"}, 110, 0.0)
+            s.add("reqs", {"status": "500", "tool": 'a"b'}, 110, 7.0)
+            a.evaluate(s, 110)
+            self.assertEqual(a.state["Down"]["state"], "firing")
+            save_snapshot(path, s, a, 110)
+            self.assertEqual(os.listdir(d), ["collector.json"])  # the temp file was renamed away
+            sent, s2 = [], Store()
+            a2 = Alerts([self._down_rule()], sent.append)
+            self.assertEqual(load_snapshot(path, s2, a2, 120), 2)
+            self.assertEqual(s2.window("up", 0, 200, {"instance": "http://app"})[0][1], [(100, 0.0), (110, 0.0)])
+            self.assertEqual(s2.window("reqs", 0, 200, {"tool": 'a"b'})[0][0], {"status": "500", "tool": 'a"b'})
+            self.assertEqual(a2.state["Down"]["state"], "firing")
+            s2.add("up", {"instance": "http://app"}, 120, 0.0); a2.evaluate(s2, 120)
+            self.assertEqual(sent, [])  # still down after the restart: no second "firing" page
+
+    def test_snapshot_load_drops_old_points_unknown_alerts_and_bad_files(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as d:
+            path = os.path.join(d, "c.json")
+            s, a = Store(retention=60), Alerts([self._down_rule()])
+            s.add("m", {}, 0, 1.0); s.add("m", {}, 100, 2.0)
+            a.state["Down"].update(state="firing", since=5, value=0.0)
+            save_snapshot(path, s, a, 100)
+            s2, a2 = Store(retention=60), Alerts([dict(self._down_rule(), alert="Renamed")])
+            self.assertEqual(load_snapshot(path, s2, a2, 100), 1)
+            self.assertEqual(s2.window("m", 0, 200)[0][1], [(100, 2.0)])  # the point from t=0 is older than the retention
+            self.assertEqual(a2.state["Renamed"]["state"], "inactive")  # the saved "Down" rule no longer exists
+            with open(path, "w") as f:
+                f.write("{not json")
+            self.assertEqual(load_snapshot(path, Store(), Alerts([]), 100), 0)
+            self.assertEqual(load_snapshot(os.path.join(d, "missing.json"), Store(), Alerts([]), 100), 0)
+            with open(path, "w") as f:
+                json.dump({"series": [["m", "not a label list", [[1, 2]]]]}, f)
+            self.assertEqual(load_snapshot(path, Store(), Alerts([]), 100), 0)
 
 
 if __name__ == "__main__":
